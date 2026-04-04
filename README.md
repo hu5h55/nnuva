@@ -26,7 +26,7 @@ chmod +x nnuva.py
 ## Usage
 Run NNUVA against a specific file, directory, or wildcard pattern. If no path is provided, it scans the current directory.
 
-bash
+nnuva
 # Scan current directory
 nnuva
 

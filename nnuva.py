@@ -7,14 +7,6 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import sys
 import os
@@ -24,13 +16,14 @@ import shutil
 import math
 import argparse
 import unicodedata
+import re
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "1.2.4"
+VERSION = "1.6.9"
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
 MAX_THREADS = min(32, (os.cpu_count() or 4) * 2)
 
@@ -42,9 +35,10 @@ class Color:
     YELLOW = '\033[93m'
     CYAN = '\033[96m'
     GRAY = '\033[90m'
+    WHITE = '\033[97m'
 
 EXPLANATIONS = {
-    'SIZE': 'Size', 'DUR': 'Runtime', 'RES': 'Res', 'NQI': 'Quality',
+    'SIZE': 'Size', 'DUR': 'Runtime', 'RES': 'Res', 'NQI': 'NQI',
     'VIDEO': 'Video', 'BITRATE': 'Bitrate', 'FPS': 'FPS', 'DEPTH': 'Depth',
     'AUDIO': 'Audio', 'LANG': 'Lang', 'SUBS': 'Subs', 'HDR': 'HDR'
 }
@@ -55,7 +49,10 @@ EXPLANATIONS = {
 
 def get_display_width(text):
     if not text: return 0
-    text = unicodedata.normalize('NFC', str(text))
+    # Strip ANSI escape sequences for width calculation to prevent column skew
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+    clean_text = ansi_escape.sub('', str(text))
+    text = unicodedata.normalize('NFC', clean_text)
     width = 0
     for c in text:
         if unicodedata.category(c) in ('Mn', 'Me', 'Cf'): continue
@@ -63,171 +60,35 @@ def get_display_width(text):
     return width
 
 def pad_string(text, target_width):
-    text = unicodedata.normalize('NFC', str(text))
     padding_needed = max(0, target_width - get_display_width(text))
-    return text + (" " * padding_needed)
+    return str(text) + (" " * padding_needed)
 
 def truncate(string, max_width):
     string = unicodedata.normalize('NFC', str(string))
     if get_display_width(string) <= max_width: return string
-    
     keep = (max_width - 3) // 2
     left, left_w = "", 0
     for c in string:
         w = 0 if unicodedata.category(c) in ('Mn', 'Me', 'Cf') else (2 if unicodedata.east_asian_width(c) in 'WF' else 1)
         if left_w + w <= keep: left += c; left_w += w
         else: break
-        
     right, right_w = "", 0
     for c in reversed(string):
         w = 0 if unicodedata.category(c) in ('Mn', 'Me', 'Cf') else (2 if unicodedata.east_asian_width(c) in 'WF' else 1)
         if right_w + w <= keep: right = c + right; right_w += w
         else: break
-        
     return left + "..." + right
 
 # ==============================================================================
-# QUALITY SCORING ALGORITHM (NQI)
+# QUALITY SCORING & SIZE FORMATTING
 # ==============================================================================
-
-def calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_codec):
-    if not bitrate or res_label == "N/A": return "N/A"
-
-    eff = 1.0
-    if "HEVC" in v_codec or "H265" in v_codec: eff = 0.5
-    elif "AV1" in v_codec: eff = 0.4
-    elif "MPEG" in v_codec: eff = 1.5
-
-    target_kbps = 8000 
-    if "4K" in res_label: target_kbps = 25000
-    elif "1080p" in res_label: target_kbps = 7000
-    elif "720p" in res_label: target_kbps = 3000
-    else: target_kbps = 1500
-
-    target_kbps *= eff
-    actual_kbps = float(bitrate) / 1000
-    ratio = actual_kbps / target_kbps
-
-    score = min(3.5, ratio * 3.5)
-
-    if "720p" in res_label or "480p" in res_label: score = min(score, 2.0)
-    elif "1080p" in res_label: score = min(score, 3.0)
-
-    if "4K" in res_label: score += 0.5
-    if "HDR" in hdr_label or "DV" in hdr_label or "10b" in hdr_label: score += 0.5
-    if "TRUEHD" in a_codec or "DTS-HD" in a_codec or "FLAC" in a_codec: score += 0.5
-
-    final_score = int(round(min(5.0, max(1.0, score))))
-    return ("█" * final_score) + ("░" * (5 - final_score))
-
-# ==============================================================================
-# SYSTEM MANAGEMENT
-# ==============================================================================
-
-def get_installed_version(target_path):
-    if not os.path.exists(target_path): return None
-    try:
-        with open(target_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                if line.startswith('VERSION ='):
-                    return line.split('=')[1].strip().strip('\'"')
-    except Exception: return "Unknown"
-    return None
-
-def perform_installation(is_update=False):
-    current_script = os.path.abspath(__file__)
-    target_dir = os.path.expanduser("~/.local/bin")
-    target_path = os.path.join(target_dir, "nnuva")
-
-    action = "Updating" if is_update else "Installing"
-    print(f"\n{Color.GRAY}{action} to {target_path}...{Color.RESET}")
-    os.makedirs(target_dir, exist_ok=True)
-    
-    try:
-        shutil.copy(current_script, target_path)
-        os.chmod(target_path, 0o755)
-        success_msg = "updated" if is_update else "copied"
-        print(f"{Color.GREEN}✓ Successfully {success_msg} NNUVA to your local bin.{Color.RESET}")
-        
-        if target_dir not in os.environ.get('PATH', ''):
-            print(f"\n{Color.YELLOW}Almost done!{Color.RESET} {target_dir} is not in your system PATH.")
-            print("To finish, run this command or add it to your ~/.bashrc / ~/.zshrc:")
-            print(f"{Color.BOLD}export PATH=\"$HOME/.local/bin:$PATH\"{Color.RESET}\n")
-        elif not is_update:
-            print(f"Installation complete! You can now run {Color.BOLD}nnuva{Color.RESET} from anywhere.\n")
-        sys.exit(0)
-    except Exception as e:
-        print(f"{Color.RED}Installation failed: {e}{Color.RESET}\n")
-        sys.exit(1)
-
-def handle_uninstall():
-    target_path = os.path.expanduser("~/.local/bin/nnuva")
-    if os.path.exists(target_path):
-        try:
-            os.remove(target_path)
-            print(f"{Color.GREEN}✓ NNUVA has been uninstalled from {target_path}{Color.RESET}")
-        except Exception as e:
-            print(f"{Color.RED}Failed to uninstall: {e}{Color.RESET}")
-            sys.exit(1)
-    else:
-        print(f"{Color.YELLOW}NNUVA is not currently installed at {target_path}{Color.RESET}")
-    sys.exit(0)
-
-def smart_install_prompt():
-    if not sys.stdout.isatty(): return
-    target_path = os.path.expanduser("~/.local/bin/nnuva")
-    if os.path.abspath(__file__) == target_path: return
-
-    installed_version = get_installed_version(target_path)
-    if installed_version == VERSION: return
-
-    print(f"{Color.CYAN}NNUVA is running in standalone mode.{Color.RESET}")
-    print(f"{Color.GRAY}(Installation safely copies this script to your local bin without modifying shell configs){Color.RESET}\n")
-    
-    try:
-        if installed_version:
-            response = input(f"Update global install from v{installed_version} to v{VERSION}? [y/N]: ").strip().lower()
-            is_update = True
-        else:
-            response = input(f"Copy NNUVA to {target_path}? [y/N]: ").strip().lower()
-            is_update = False
-    except KeyboardInterrupt:
-        print("\n")
-        sys.exit(1)
-    
-    if response in ['y', 'yes']: perform_installation(is_update)
-    else: print(f"{Color.GRAY}Skipping installation. Running standalone scan...{Color.RESET}\n")
-
-# ==============================================================================
-# CORE SCANNING LOGIC
-# ==============================================================================
-
-def check_ffprobe():
-    if not shutil.which('ffprobe'):
-        print("Error: ffprobe is not installed.")
-        sys.exit(1)
-
-def get_files(args):
-    media_files = set()
-    paths = args if args else ['.']
-    for arg in paths:
-        p = Path(arg)
-        if not p.exists(): continue
-        
-        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS and not p.name.startswith('._'):
-            media_files.add(p)
-        elif p.is_dir():
-            for ext in SUPPORTED_EXTS:
-                media_files.update(f for f in p.glob(f"*{ext}") if f.is_file() and not f.name.startswith('._'))
-                media_files.update(f for f in p.glob(f"*/*{ext}") if f.is_file() and not f.name.startswith('._'))
-        else:
-            for f in Path('.').glob(arg):
-                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS and not f.name.startswith('._'):
-                    media_files.add(f)
-    return sorted(list(media_files))
 
 def format_size(size_bytes):
     if size_bytes == 0: return "0B"
+    # Logic: Cross 100GB -> Switch to TB (e.g. 102.4GB becomes 0.1TB)
+    if size_bytes >= 100 * 1024**3:
+        return f"{size_bytes / (1024**4):.1f}TB"
+    
     size_name = ("B", "KB", "MB", "GB", "TB")
     i = int(math.floor(math.log(size_bytes, 1024)))
     p = math.pow(1024, i)
@@ -241,186 +102,223 @@ def format_duration(seconds):
         return f"{int(h)}:{int(m):02d}:{int(s):02d}" if h > 0 else f"{int(m):02d}:{int(s):02d}"
     except: return "N/A"
 
-def analyze_file(filepath):
-    size_bytes = os.path.getsize(filepath)
-    size_str = format_size(size_bytes)
-    cmd = [
-        'ffprobe', '-v', 'error', '-show_entries', 
-        'format=duration,bit_rate:stream=codec_type,codec_name,width,height,color_transfer,color_primaries,channels,r_frame_rate,bits_per_raw_sample,pix_fmt:stream_side_data=side_data_type,dv_profile:stream_tags=language',
-        '-print_format', 'json', str(filepath)
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        if result.returncode != 0: return {"file": filepath.name, "error": True, "SIZE": size_str}
-        data = json.loads(result.stdout)
-        if not data: return {"file": filepath.name, "error": True, "SIZE": size_str}
-    except subprocess.TimeoutExpired:
-        return {"file": filepath.name, "error": True, "SIZE": size_str}
-    except Exception: 
-        return {"file": filepath.name, "error": True, "SIZE": size_str}
+def calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_codec):
+    if not bitrate or res_label == "N/A": return "N/A"
+    eff = 0.5 if any(x in v_codec for x in ["HEVC", "H265"]) else 0.4 if "AV1" in v_codec else 1.0
+    target_kbps = 25000 if "4K" in res_label else 7000 if "1080p" in res_label else 3000
+    target_kbps *= eff
+    actual_kbps = float(bitrate) / 1000
+    ratio = actual_kbps / target_kbps
+    score = min(3.5, ratio * 3.5)
+    if "4K" in res_label: score += 0.5
+    if any(x in hdr_label for x in ["HDR", "DV", "10b"]): score += 0.5
+    if any(x in a_codec for x in ["TRUEHD", "DTS-HD", "FLAC"]): score += 0.5
+    return str(int(round(min(5.0, max(1.0, score)))))
 
-    v_codec, width, height, transfer, primaries, dv_profile, hdr10plus, fps, depth = "N/A", None, None, "", "", None, False, "N/A", "N/A"
-    a_codec, a_ch, sub_codecs, audio_langs, sub_langs = "N/A", "", set(), [], []
+# ==============================================================================
+# SYSTEM MANAGEMENT
+# ==============================================================================
+
+def get_installed_version(target_path):
+    if not os.path.exists(target_path): return None
+    try:
+        with open(target_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('VERSION ='):
+                    return line.split('=')[1].strip().strip('\'"')
+    except: return "Unknown"
+    return None
+
+def perform_installation(is_update=False):
+    current_script = os.path.abspath(__file__)
+    target_path = os.path.expanduser("~/.local/bin/nnuva")
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    shutil.copy(current_script, target_path)
+    os.chmod(target_path, 0o755)
+    print(f"{Color.GREEN}✓ NNUVA updated to {target_path}{Color.RESET}")
+    sys.exit(0)
+
+def smart_install_prompt():
+    if not sys.stdout.isatty(): return
+    target_path = os.path.expanduser("~/.local/bin/nnuva")
+    if os.path.abspath(__file__) == target_path: return
+    inst_ver = get_installed_version(target_path)
+    if inst_ver == VERSION: return
+    print(f"{Color.CYAN}NNUVA v{VERSION} (Current standalone){Color.RESET}")
+    try:
+        resp = input(f"Update global install from v{inst_ver or 'N/A'} to v{VERSION}? [y/N]: ").strip().lower()
+        if resp in ['y', 'yes']: perform_installation()
+    except KeyboardInterrupt:
+        print("\nAborted.")
+        sys.exit(1)
+
+# ==============================================================================
+# CORE ENGINE
+# ==============================================================================
+
+def analyze_file(filepath):
+    try:
+        rel_dir = filepath.parent.relative_to(Path.cwd())
+        dir_name = str(rel_dir)
+    except ValueError: dir_name = str(filepath.parent)
+    if dir_name == ".": dir_name = "CURRENT DIRECTORY"
+    
+    size_bytes = os.path.getsize(filepath)
+    cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration,bit_rate:stream=codec_type,codec_name,width,height,color_transfer,color_primaries,channels,r_frame_rate,bits_per_raw_sample,pix_fmt:stream_side_data=side_data_type,dv_profile:stream_tags=language', '-print_format', 'json', str(filepath)]
+    try:
+        data = json.loads(subprocess.run(cmd, capture_output=True, text=True, timeout=15).stdout)
+    except: return {"file": filepath.name, "dir": dir_name, "size_bytes": size_bytes, "error": True, "SIZE": format_size(size_bytes)}
+
     fmt = data.get('format', {})
     dur_raw = fmt.get('duration')
-    dur_str = format_duration(dur_raw)
+    bitrate = fmt.get('bit_rate') or ((size_bytes * 8) / float(dur_raw)) if dur_raw else None
     
-    bitrate = fmt.get('bit_rate')
-    if not bitrate and dur_raw:
-        try: bitrate = (size_bytes * 8) / float(dur_raw)
-        except: pass
-        
-    br_str = f"{round(float(bitrate) / 1000000, 1)}M" if bitrate else "N/A"
+    v_codec, width, height, transfer, primaries, dv_profile, hdr10plus, fps, depth = "N/A", None, None, "", "", None, False, "N/A", "N/A"
+    a_codec, a_ch, audio_langs, sub_langs, sub_codecs = "N/A", "", [], [], set()
     has_video = False
-
     for stream in data.get('streams', []):
         stype = stream.get('codec_type')
         lang = stream.get('tags', {}).get('language', 'und').upper()[:2]
         if stype == 'video':
             has_video = True
-            if v_codec == "N/A":
-                v_codec = stream.get('codec_name', 'N/A').upper()
-                width, height = stream.get('width'), stream.get('height')
-                transfer, primaries = stream.get('color_transfer', ''), stream.get('color_primaries', '')
-                if '/' in (r_fps := stream.get('r_frame_rate', '0/1')):
-                    n, d = r_fps.split('/')
-                    if d != '0': fps = f"{float(n)/float(d):.3f}".rstrip('0').rstrip('.')
-                pix_fmt = stream.get('pix_fmt', '')
-                raw_depth = stream.get('bits_per_raw_sample')
-                depth = f"{raw_depth}b" if raw_depth else ("10b" if '10' in pix_fmt else "12b" if '12' in pix_fmt else "8b" if pix_fmt else "N/A")
-                for sd in stream.get('side_data_list', []):
-                    if sd.get('side_data_type') == 'DOVI configuration record': dv_profile = sd.get('dv_profile')
-                    if 'HDR10+' in sd.get('side_data_type', ''): hdr10plus = True
+            v_codec = stream.get('codec_name', 'N/A').upper()
+            width, height = stream.get('width'), stream.get('height')
+            transfer, primaries = stream.get('color_transfer', ''), stream.get('color_primaries', '')
+            if '/' in (r_fps := stream.get('r_frame_rate', '0/1')):
+                n, d = r_fps.split('/')
+                if d != '0': fps = f"{float(n)/float(d):.3f}".rstrip('0').rstrip('.')
+            pix_fmt = stream.get('pix_fmt', '')
+            depth = f"{stream.get('bits_per_raw_sample')}b" if stream.get('bits_per_raw_sample') else ("10b" if '10' in pix_fmt else "8b")
+            for sd in stream.get('side_data_list', []):
+                if sd.get('side_data_type') == 'DOVI configuration record': dv_profile = sd.get('dv_profile')
+                if 'HDR10+' in sd.get('side_data_type', ''): hdr10plus = True
         elif stype == 'audio':
             if a_codec == "N/A":
                 a_codec = stream.get('codec_name', 'N/A').upper()
                 ch = stream.get('channels', 0)
-                a_ch = "7.1" if ch == 8 else "5.1" if ch == 6 else "2.0" if ch == 2 else str(ch)
+                a_ch = "7.1" if ch == 8 else "5.1" if ch == 6 else "2.0"
             if lang != 'UN': audio_langs.append(lang)
         elif stype == 'subtitle':
             c = stream.get('codec_name', '').lower()
             if 'pgs' in c: sub_codecs.add('PGS [BURN]')
-            elif 'vobsub' in c: sub_codecs.add('VOBSUB [B]')
             elif c: sub_codecs.add('Text')
             if lang != 'UN': sub_langs.append(lang)
-            
+
     if not has_video: return {"skip": True}
-    
-    # Smart Resolution Parsing (Handles cropped widescreen aspect ratios)
-    res_label = "N/A"
-    if width and height:
-        if width >= 3800 or height >= 2100: res_label = "4K"
-        elif width >= 1900 or height >= 1000: res_label = "1080p"
-        elif width >= 1200 or height >= 700: res_label = "720p"
-        elif width >= 600 or height >= 480: res_label = "480p"
-        else: res_label = f"{width}x{height}"
-        
-    s_codec = 'PGS [BURN]' if 'PGS [BURN]' in sub_codecs else 'VOBSUB [B]' if 'VOBSUB [B]' in sub_codecs else 'Text' if 'Text' in sub_codecs else 'None'
-    hdr_label = f"DV P{dv_profile}{' [TRAP!]' if dv_profile == 5 else ''}" if dv_profile else ""
-    hdr_label = f"{hdr_label} + HDR10+" if hdr_label and hdr10plus else "HDR10+" if hdr10plus else hdr_label
+    res_label = "4K" if (width or 0) >= 3800 else "1080p" if (width or 0) >= 1900 else "720p" if (width or 0) >= 1200 else "480p"
+    hdr_label = f"DV P{dv_profile}" if dv_profile else ""
+    hdr_label = f"{hdr_label}+" if hdr_label and hdr10plus else "HDR10+" if hdr10plus else hdr_label
     base = "HDR10" if transfer == "smpte2084" or primaries == "bt2020" else "SDR"
     hdr_label = f"{hdr_label} ({base})" if hdr_label else base
-    a_str = f"A:{','.join(dict.fromkeys(audio_langs))}" if audio_langs else ""
-    s_str = f"S:{','.join(dict.fromkeys(sub_langs))}" if sub_langs else ""
-    a_full = f"{a_codec} {a_ch}".strip() if a_codec != "N/A" else "N/A"
-    
-    nqi_label = calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_full)
-
+    a_uniq, s_uniq = list(dict.fromkeys(audio_langs)), list(dict.fromkeys(sub_langs))
+    a_full = f"{a_codec} {a_ch}".strip()
     return {
-        "file": filepath.name, "error": False, "skip": False, "SIZE": size_str, "DUR": dur_str,
-        "RES": res_label, "NQI": nqi_label, "VIDEO": v_codec, "AUDIO": a_full,
-        "SUBS": s_codec, "HDR": hdr_label, "BITRATE": br_str, "DEPTH": depth, "FPS": fps, "LANG": f"{a_str} {s_str}".strip() or "None"
+        "file": filepath.name, "dir": dir_name, "size_bytes": size_bytes, "error": False, "skip": False, 
+        "SIZE": format_size(size_bytes), "DUR": format_duration(dur_raw), "RES": res_label, 
+        "NQI": calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_full), "VIDEO": v_codec, 
+        "AUDIO": a_full, "SUBS": next(iter(sub_codecs), ""), "HDR": hdr_label, 
+        "BITRATE": f"{round(float(bitrate)/1000000,1)}M" if bitrate else "N/A", "DEPTH": depth, "FPS": fps, 
+        "LANG": f"A:{','.join(a_uniq[:3])} S:{','.join(s_uniq[:3])}".strip()
     }
 
 def style_text(text, col_name):
     if not text: return text
-    
-    # NQI Bar Graph Coloring
-    if col_name == "NQI" and "█" in text:
-        score = text.count('█')
-        padding = text[5:]
-        if score >= 4: c = Color.GREEN
-        elif score >= 3: c = Color.YELLOW
-        else: c = Color.RED
-        return f"{c}{'█' * score}{Color.GRAY}{'░' * (5 - score)}{Color.RESET}{padding}"
-        
-    # Resolution Coloring
-    if text == "1080p": return f"{Color.YELLOW}{text}{Color.RESET}"
-    if text in ["720p", "480p"]: return f"{Color.RED}{text}{Color.RESET}"
-        
-    if any(x in text for x in ["ERROR", "CORRUPT", "[TRAP!]", "[BURN]"]): return f"{Color.BOLD}{Color.RED}{text}{Color.RESET}"
-    if any(x in text for x in ["4K", "HEVC", "AV1", "10b", "TRUEHD", "DTS-HD"]): return f"{Color.GREEN}{text}{Color.RESET}"
-    if col_name == "SIZE": return f"{Color.CYAN}{text}{Color.RESET}"
-    if col_name == "HEADER": return f"{Color.BOLD}{text}{Color.RESET}"
-        
+    s = text.strip()
+    if col_name == "NQI" and s.isdigit():
+        c = Color.GREEN if int(s) >= 4 else Color.YELLOW if int(s) >= 3 else Color.RED
+        return f"{c}■{Color.RESET}" + (" " * (len(text)-1))
+    if s == "1080p": return f"{Color.YELLOW}{text}{Color.RESET}"
+    if s in ["720p", "480p"]: return f"{Color.RED}{text}{Color.RESET}"
+    if any(x in text for x in ["ERROR", "CORRUPT", "[BURN]"]): return f"{Color.BOLD}{Color.RED}{text}{Color.RESET}"
+    if any(x in text for x in ["4K", "HEVC", "AV1", "10b"]): return f"{Color.GREEN}{text}{Color.RESET}"
     return text
+
+def style_folder_line(path_str, file_width, prefix=" ┌─ "):
+    path_obj = Path(path_str)
+    folder_name = f"{path_obj.name}/"
+    parent_path = str(path_obj.parent)
+    if parent_path == ".": parent_path = ""
+    else: parent_path += "/"
+    # Build styled version
+    styled = f"{Color.GRAY}{Color.BOLD}{prefix}{parent_path}{Color.RESET}{Color.WHITE}{Color.BOLD}{folder_name}{Color.RESET}"
+    # Padding math using visual width only
+    vis_width = get_display_width(f"{prefix}{parent_path}{folder_name}")
+    return styled + (" " * max(0, file_width - vis_width))
 
 def main():
     smart_install_prompt()
-    check_ffprobe()
-    parser = argparse.ArgumentParser(description="NNUVA - Nic's Nearly Universal Video Analyzer")
-    parser.add_argument('-v', '--version', action='version', version=f'NNUVA v{VERSION}')
-    parser.add_argument('paths', nargs='*', default=['.'], help="Files or directories to scan")
-    sys_group = parser.add_argument_group('System Management')
-    sys_group.add_argument('--install', action='store_true', help="Install NNUVA globally")
-    sys_group.add_argument('--uninstall', action='store_true', help="Uninstall NNUVA")
-    group = parser.add_argument_group('Profiles')
-    group.add_argument('--tech', action='store_true', help="Technical info (Bitrate, FPS, Depth)")
-    group.add_argument('--lang', action='store_true', help="Language tags")
-    group.add_argument('-a', '--all', action='store_true', help="Show all columns")
-    c_group = parser.add_argument_group('Individual Columns')
-    for col in ['size', 'dur', 'res', 'nqi', 'video', 'audio', 'subs', 'hdr', 'bitrate', 'depth', 'fps']:
-        c_group.add_argument(f'--{col}', action='store_true')
-    c_group.add_argument('--lang_col', dest='lang_flag', action='store_true')
+    if not shutil.which('ffprobe'): print("Error: ffprobe missing"); sys.exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('paths', nargs='*', default=['.'])
+    parser.add_argument('-R', '--recursive', action='store_true')
+    parser.add_argument('-a', '--all', action='store_true')
     args = parser.parse_args()
-    
-    if args.uninstall: handle_uninstall()
-    if args.install: perform_installation()
 
-    ALL_COLS = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'BITRATE', 'FPS', 'DEPTH', 'AUDIO', 'LANG', 'SUBS', 'HDR']
-    flag_map = {col: getattr(args, col.lower() if col != 'LANG' else 'lang_flag') for col in ALL_COLS}
-    if any(flag_map.values()): active_cols = [c for c in ALL_COLS if flag_map[c]]
-    elif args.all: active_cols = ALL_COLS
-    elif args.tech: active_cols = ['SIZE', 'DUR', 'BITRATE', 'RES', 'NQI', 'VIDEO', 'FPS', 'DEPTH', 'HDR', 'AUDIO']
-    elif args.lang: active_cols = ['DUR', 'NQI', 'AUDIO', 'LANG', 'SUBS']
-    else: active_cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'AUDIO', 'SUBS', 'HDR']
-
-    files = get_files(args.paths)
-    if not files: print("Error: No valid media files found."); sys.exit(1)
+    files, skipped = [], []
+    for p_str in args.paths:
+        p = Path(p_str)
+        if not p.exists():
+            for f in Path('.').glob(p_str):
+                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS: files.append(f)
+            continue
+        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS: files.append(p)
+        elif p.is_dir():
+            search = p.rglob("*") if args.recursive else p.glob("*")
+            for f in search:
+                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS: files.append(f)
+                elif f.is_dir() and not args.recursive: skipped.append(f.name)
     
-    total, raw_results = len(files), []
-    sys.stdout.write('\033[?25l') 
-    try:
-        with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
-            for i, future in enumerate(as_completed([executor.submit(analyze_file, f) for f in files]), 1):
-                raw_results.append(future.result())
-                filled = int(30 * (i / total))
-                bar = f"{Color.CYAN}{'█' * filled}{Color.GRAY}{'░' * (30 - filled)}{Color.RESET}"
-                sys.stdout.write(f"\r{Color.BOLD}Scanning {total} files:{Color.RESET} [{bar}] {i}/{total} ({int((i/total) * 100)}%)")
+    if not files and not skipped: print("Error: Nothing found"); sys.exit(1)
+    
+    results = []
+    if files:
+        with ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
+            futures = [ex.submit(analyze_file, f) for f in files]
+            for i, f in enumerate(as_completed(futures), 1):
+                res = f.result()
+                if not res.get("skip"): results.append(res)
+                sys.stdout.write(f"\r{Color.BOLD}Scanning {len(files)} files... {int(i/len(files)*100)}%{Color.RESET}")
                 sys.stdout.flush()
-    finally: sys.stdout.write('\033[?25h\r\033[K') 
-            
-    results = sorted([r for r in raw_results if not r.get("skip")], key=lambda x: x['file'])
-    if not results: print("No valid video files found."); sys.exit(0)
+        sys.stdout.write('\r\033[K')
 
-    # Use visual width for columns
-    col_widths = {col: max(get_display_width(col), get_display_width(EXPLANATIONS[col]), max((get_display_width(str(r.get(col, "N/A"))) for r in results if not r['error']), default=0)) for col in active_cols}
-    file_width = max(20, shutil.get_terminal_size((120, 24)).columns - sum(col_widths.values()) - (len(active_cols) * 3))
+    results.sort(key=lambda x: (0 if x['dir'] == "CURRENT DIRECTORY" else 1, x['dir'], x['file']))
+    dir_sizes = {d: sum(r['size_bytes'] for r in results if r['dir'] == d) for d in set(r['dir'] for r in results)}
+
+    cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'AUDIO', 'SUBS', 'HDR']
+    if args.all: cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'BITRATE', 'FPS', 'DEPTH', 'AUDIO', 'LANG', 'SUBS', 'HDR']
     
-    sep = f"{Color.GRAY}{'-' * (file_width + sum(col_widths.values()) + (len(active_cols) * 3))}{Color.RESET}"
-    divider = f" {Color.GRAY}|{Color.RESET} "
+    tw = shutil.get_terminal_size().columns - 1
+    cw = {c: max(get_display_width(c), get_display_width(EXPLANATIONS[c]), max((get_display_width(r.get(c, "")) for r in results), default=0)) for c in cols}
+    fw = max(20, tw - sum(cw.values()) - (len(cols) * 3))
+    sep = f"{Color.GRAY}{'-' * tw}{Color.RESET}"
+    div = f" {Color.GRAY}|{Color.RESET} "
+
+    print(f"{sep}\n{Color.BOLD}{pad_string('FILE', fw)}{Color.RESET}" + "".join([f"{div}{Color.BOLD}{pad_string(c, cw[c])}{Color.RESET}" for c in cols]) + f"\n{sep}")
     
-    print(f"{sep}\n{style_text(pad_string('FILE', file_width), 'HEADER')}" + "".join([f"{divider}{style_text(pad_string(c, col_widths[c]), 'HEADER')}" for c in active_cols]) + f"\n{sep}")
-    
-    for r in results:
-        name = truncate(r['file'], file_width)
-        row_str = pad_string(name, file_width)
-        for idx, col in enumerate(active_cols):
-            val = 'ERROR' if r['error'] and idx == 0 else 'CORRUPT' if r['error'] and idx == 1 else 'N/A' if r['error'] else str(r.get(col, 'N/A'))
-            row_str += f"{divider}{style_text(pad_string(val, col_widths[col]), col)}"
+    dir_names = list(dict.fromkeys(r['dir'] for r in results))
+    for i, d in enumerate(dir_names):
+        if i > 0: print((" " * fw) + "".join([f"{div}{' ' * cw[c]}" for c in cols]))
+        row_str = style_folder_line(d, fw)
+        for c in cols:
+            if c == 'SIZE': row_str += f"{div}{Color.GRAY}{Color.BOLD}{pad_string(format_size(dir_sizes[d]), cw[c])}{Color.RESET}"
+            else: row_str += f"{div}{pad_string('', cw[c])}"
         print(row_str)
-        
-    print(f"{sep}\n{pad_string(' ', file_width)}" + "".join([f"{divider}{Color.GRAY}{pad_string(EXPLANATIONS[c], col_widths[c])}{Color.RESET}" for c in active_cols]) + f"\n{sep}")
+
+        files_in_dir = [r for r in results if r['dir'] == d]
+        for j, r in enumerate(files_in_dir):
+            prefix = " └─ " if j == len(files_in_dir) - 1 else " ├─ "
+            row_str = pad_string(truncate(f"{prefix}{r['file']}", fw), fw)
+            for c in cols:
+                row_str += f"{div}{style_text(pad_string(r.get(c, 'N/A'), cw[c]), c)}"
+            print(row_str)
+
+    if skipped and not args.recursive:
+        print((" " * fw) + "".join([f"{div}{' ' * cw[c]}" for c in cols]))
+        print(f"{Color.GRAY}{Color.BOLD}{pad_string(' ┌─ Unscanned Subdirectories/', fw)}{Color.RESET}" + "".join([f"{div}{' '*cw[c]}" for c in cols]))
+        for k, s in enumerate(skipped):
+            prefix = " └─ " if k == len(skipped)-1 else " ├─ "
+            print(f"{Color.GRAY}{Color.BOLD}{pad_string(prefix+s+'/', fw)}{Color.RESET}" + "".join([f"{div}{' '*cw[c]}" for c in cols]))
+    print(f"{sep}\n{pad_string(' ', fw)}" + "".join([f"{div}{Color.GRAY}{pad_string(EXPLANATIONS[c], cw[c])}{Color.RESET}" for c in cols]) + f"\n{sep}")
 
 if __name__ == "__main__":
     try: main()

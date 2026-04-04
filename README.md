@@ -16,7 +16,7 @@ Instead of dealing with unreadable JSON dumps or running manual `ffprobe` comman
 
 ## Installation
 Clone the repository and make the script executable. 
-For global use, simply symlink it to your local bin:
+For global use, simply run nnuva.py to copy to your local bin
 
 bash
 git clone https://github.com/hu5h55/nnuva.git
@@ -35,7 +35,6 @@ nnuva /path/to/movies
 
 # Scan using wildcards (wrap in quotes to prevent shell expansion)
 nnuva "*.mkv"
-\`\`\`
 
 ### Profiles & Options
 NNUVA includes custom profiles to swap which columns are displayed without cluttering smaller monitors:

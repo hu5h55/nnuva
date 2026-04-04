@@ -18,17 +18,15 @@ Instead of dealing with unreadable JSON dumps or running manual `ffprobe` comman
 Clone the repository and make the script executable. 
 For global use, simply symlink it to your local bin:
 
-\`\`\`bash
-git clone https://github.com/yourusername/nnuva.git
+bash
+git clone https://github.com/hu5h55/nnuva.git
 cd nnuva
 chmod +x nnuva.py
-sudo ln -s $(pwd)/nnuva.py /usr/local/bin/nnuva
-\`\`\`
 
 ## Usage
 Run NNUVA against a specific file, directory, or wildcard pattern. If no path is provided, it scans the current directory.
 
-\`\`\`bash
+bash
 # Scan current directory
 nnuva
 

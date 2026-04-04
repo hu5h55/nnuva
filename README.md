@@ -20,7 +20,9 @@ For global use, simply run nnuva.py to copy to your local bin
 
 bash
 git clone https://github.com/hu5h55/nnuva.git
+
 cd nnuva
+
 chmod +x nnuva.py
 
 ## Usage

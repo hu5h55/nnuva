@@ -30,9 +30,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "1.0.2"
+VERSION = "1.2.4"
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
-# Dynamically scale threads based on available CPU cores for I/O operations
 MAX_THREADS = min(32, (os.cpu_count() or 4) * 2)
 
 class Color:
@@ -45,53 +44,84 @@ class Color:
     GRAY = '\033[90m'
 
 EXPLANATIONS = {
-    'SIZE': 'File Size', 'DUR': 'Runtime', 'RES': 'Resolution', 'VIDEO': 'Vid Codec',
-    'BITRATE': 'Avg Bitrate', 'FPS': 'Framerate', 'DEPTH': 'Color Depth',
-    'AUDIO': 'Aud Codec', 'LANG': 'Languages', 'SUBS': 'Subtitles', 'HDR': 'HDR Format'
+    'SIZE': 'Size', 'DUR': 'Runtime', 'RES': 'Res', 'NQI': 'Quality',
+    'VIDEO': 'Video', 'BITRATE': 'Bitrate', 'FPS': 'FPS', 'DEPTH': 'Depth',
+    'AUDIO': 'Audio', 'LANG': 'Lang', 'SUBS': 'Subs', 'HDR': 'HDR'
 }
 
 # ==============================================================================
-# STRING FORMATTING & DISPLAY MATH (JIS/UTF-8 SAFE)
+# STRING FORMATTING & DISPLAY MATH (JIS/NFC/ZERO-WIDTH SAFE)
 # ==============================================================================
 
 def get_display_width(text):
-    """Calculates the visual terminal width of a string, accounting for full-width characters."""
     if not text: return 0
-    return sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in str(text))
+    text = unicodedata.normalize('NFC', str(text))
+    width = 0
+    for c in text:
+        if unicodedata.category(c) in ('Mn', 'Me', 'Cf'): continue
+        width += 2 if unicodedata.east_asian_width(c) in 'WF' else 1
+    return width
 
 def pad_string(text, target_width):
-    """Pads a string with spaces based on its visual terminal width."""
-    text = str(text)
+    text = unicodedata.normalize('NFC', str(text))
     padding_needed = max(0, target_width - get_display_width(text))
     return text + (" " * padding_needed)
 
 def truncate(string, max_width):
-    """Safely truncates a string from the middle without breaking full-width characters."""
-    if get_display_width(string) <= max_width: 
-        return string
-        
+    string = unicodedata.normalize('NFC', str(string))
+    if get_display_width(string) <= max_width: return string
+    
     keep = (max_width - 3) // 2
     left, left_w = "", 0
-    
     for c in string:
-        w = 2 if unicodedata.east_asian_width(c) in 'WF' else 1
-        if left_w + w <= keep:
-            left += c
-            left_w += w
+        w = 0 if unicodedata.category(c) in ('Mn', 'Me', 'Cf') else (2 if unicodedata.east_asian_width(c) in 'WF' else 1)
+        if left_w + w <= keep: left += c; left_w += w
         else: break
         
     right, right_w = "", 0
     for c in reversed(string):
-        w = 2 if unicodedata.east_asian_width(c) in 'WF' else 1
-        if right_w + w <= keep:
-            right = c + right
-            right_w += w
+        w = 0 if unicodedata.category(c) in ('Mn', 'Me', 'Cf') else (2 if unicodedata.east_asian_width(c) in 'WF' else 1)
+        if right_w + w <= keep: right = c + right; right_w += w
         else: break
         
     return left + "..." + right
 
 # ==============================================================================
-# SYSTEM MANAGEMENT (INSTALL / UNINSTALL)
+# QUALITY SCORING ALGORITHM (NQI)
+# ==============================================================================
+
+def calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_codec):
+    if not bitrate or res_label == "N/A": return "N/A"
+
+    eff = 1.0
+    if "HEVC" in v_codec or "H265" in v_codec: eff = 0.5
+    elif "AV1" in v_codec: eff = 0.4
+    elif "MPEG" in v_codec: eff = 1.5
+
+    target_kbps = 8000 
+    if "4K" in res_label: target_kbps = 25000
+    elif "1080p" in res_label: target_kbps = 7000
+    elif "720p" in res_label: target_kbps = 3000
+    else: target_kbps = 1500
+
+    target_kbps *= eff
+    actual_kbps = float(bitrate) / 1000
+    ratio = actual_kbps / target_kbps
+
+    score = min(3.5, ratio * 3.5)
+
+    if "720p" in res_label or "480p" in res_label: score = min(score, 2.0)
+    elif "1080p" in res_label: score = min(score, 3.0)
+
+    if "4K" in res_label: score += 0.5
+    if "HDR" in hdr_label or "DV" in hdr_label or "10b" in hdr_label: score += 0.5
+    if "TRUEHD" in a_codec or "DTS-HD" in a_codec or "FLAC" in a_codec: score += 0.5
+
+    final_score = int(round(min(5.0, max(1.0, score))))
+    return ("█" * final_score) + ("░" * (5 - final_score))
+
+# ==============================================================================
+# SYSTEM MANAGEMENT
 # ==============================================================================
 
 def get_installed_version(target_path):
@@ -116,7 +146,6 @@ def perform_installation(is_update=False):
     try:
         shutil.copy(current_script, target_path)
         os.chmod(target_path, 0o755)
-        
         success_msg = "updated" if is_update else "copied"
         print(f"{Color.GREEN}✓ Successfully {success_msg} NNUVA to your local bin.{Color.RESET}")
         
@@ -126,7 +155,6 @@ def perform_installation(is_update=False):
             print(f"{Color.BOLD}export PATH=\"$HOME/.local/bin:$PATH\"{Color.RESET}\n")
         elif not is_update:
             print(f"Installation complete! You can now run {Color.BOLD}nnuva{Color.RESET} from anywhere.\n")
-            
         sys.exit(0)
     except Exception as e:
         print(f"{Color.RED}Installation failed: {e}{Color.RESET}\n")
@@ -184,7 +212,7 @@ def get_files(args):
     paths = args if args else ['.']
     for arg in paths:
         p = Path(arg)
-        if not p.exists(): continue  # Validation: Ignore invalid paths gracefully
+        if not p.exists(): continue
         
         if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS and not p.name.startswith('._'):
             media_files.add(p)
@@ -214,7 +242,8 @@ def format_duration(seconds):
     except: return "N/A"
 
 def analyze_file(filepath):
-    size_str = format_size(os.path.getsize(filepath))
+    size_bytes = os.path.getsize(filepath)
+    size_str = format_size(size_bytes)
     cmd = [
         'ffprobe', '-v', 'error', '-show_entries', 
         'format=duration,bit_rate:stream=codec_type,codec_name,width,height,color_transfer,color_primaries,channels,r_frame_rate,bits_per_raw_sample,pix_fmt:stream_side_data=side_data_type,dv_profile:stream_tags=language',
@@ -224,17 +253,23 @@ def analyze_file(filepath):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
         if result.returncode != 0: return {"file": filepath.name, "error": True, "SIZE": size_str}
         data = json.loads(result.stdout)
-        if not data: return {"file": filepath.name, "error": True, "SIZE": size_str} # Validation: Empty JSON payload
+        if not data: return {"file": filepath.name, "error": True, "SIZE": size_str}
     except subprocess.TimeoutExpired:
-        return {"file": filepath.name, "error": True, "SIZE": size_str} # Validation: Prevent infinite hangs
+        return {"file": filepath.name, "error": True, "SIZE": size_str}
     except Exception: 
         return {"file": filepath.name, "error": True, "SIZE": size_str}
 
     v_codec, width, height, transfer, primaries, dv_profile, hdr10plus, fps, depth = "N/A", None, None, "", "", None, False, "N/A", "N/A"
     a_codec, a_ch, sub_codecs, audio_langs, sub_langs = "N/A", "", set(), [], []
     fmt = data.get('format', {})
-    dur_str = format_duration(fmt.get('duration'))
+    dur_raw = fmt.get('duration')
+    dur_str = format_duration(dur_raw)
+    
     bitrate = fmt.get('bit_rate')
+    if not bitrate and dur_raw:
+        try: bitrate = (size_bytes * 8) / float(dur_raw)
+        except: pass
+        
     br_str = f"{round(float(bitrate) / 1000000, 1)}M" if bitrate else "N/A"
     has_video = False
 
@@ -270,27 +305,54 @@ def analyze_file(filepath):
             if lang != 'UN': sub_langs.append(lang)
             
     if not has_video: return {"skip": True}
+    
+    # Smart Resolution Parsing (Handles cropped widescreen aspect ratios)
+    res_label = "N/A"
+    if width and height:
+        if width >= 3800 or height >= 2100: res_label = "4K"
+        elif width >= 1900 or height >= 1000: res_label = "1080p"
+        elif width >= 1200 or height >= 700: res_label = "720p"
+        elif width >= 600 or height >= 480: res_label = "480p"
+        else: res_label = f"{width}x{height}"
+        
     s_codec = 'PGS [BURN]' if 'PGS [BURN]' in sub_codecs else 'VOBSUB [B]' if 'VOBSUB [B]' in sub_codecs else 'Text' if 'Text' in sub_codecs else 'None'
-    res_label = "4K" if height and height >= 2160 else "1080p" if height and height >= 1080 else "720p" if height and height >= 720 else "480p" if height and height >= 480 else f"{width}x{height}" if width else "N/A"
     hdr_label = f"DV P{dv_profile}{' [TRAP!]' if dv_profile == 5 else ''}" if dv_profile else ""
     hdr_label = f"{hdr_label} + HDR10+" if hdr_label and hdr10plus else "HDR10+" if hdr10plus else hdr_label
     base = "HDR10" if transfer == "smpte2084" or primaries == "bt2020" else "SDR"
     hdr_label = f"{hdr_label} ({base})" if hdr_label else base
     a_str = f"A:{','.join(dict.fromkeys(audio_langs))}" if audio_langs else ""
     s_str = f"S:{','.join(dict.fromkeys(sub_langs))}" if sub_langs else ""
+    a_full = f"{a_codec} {a_ch}".strip() if a_codec != "N/A" else "N/A"
+    
+    nqi_label = calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_full)
 
     return {
         "file": filepath.name, "error": False, "skip": False, "SIZE": size_str, "DUR": dur_str,
-        "RES": res_label, "VIDEO": v_codec, "AUDIO": f"{a_codec} {a_ch}".strip() if a_codec != "N/A" else "N/A",
+        "RES": res_label, "NQI": nqi_label, "VIDEO": v_codec, "AUDIO": a_full,
         "SUBS": s_codec, "HDR": hdr_label, "BITRATE": br_str, "DEPTH": depth, "FPS": fps, "LANG": f"{a_str} {s_str}".strip() or "None"
     }
 
 def style_text(text, col_name):
     if not text: return text
+    
+    # NQI Bar Graph Coloring
+    if col_name == "NQI" and "█" in text:
+        score = text.count('█')
+        padding = text[5:]
+        if score >= 4: c = Color.GREEN
+        elif score >= 3: c = Color.YELLOW
+        else: c = Color.RED
+        return f"{c}{'█' * score}{Color.GRAY}{'░' * (5 - score)}{Color.RESET}{padding}"
+        
+    # Resolution Coloring
+    if text == "1080p": return f"{Color.YELLOW}{text}{Color.RESET}"
+    if text in ["720p", "480p"]: return f"{Color.RED}{text}{Color.RESET}"
+        
     if any(x in text for x in ["ERROR", "CORRUPT", "[TRAP!]", "[BURN]"]): return f"{Color.BOLD}{Color.RED}{text}{Color.RESET}"
     if any(x in text for x in ["4K", "HEVC", "AV1", "10b", "TRUEHD", "DTS-HD"]): return f"{Color.GREEN}{text}{Color.RESET}"
     if col_name == "SIZE": return f"{Color.CYAN}{text}{Color.RESET}"
     if col_name == "HEADER": return f"{Color.BOLD}{text}{Color.RESET}"
+        
     return text
 
 def main():
@@ -307,7 +369,7 @@ def main():
     group.add_argument('--lang', action='store_true', help="Language tags")
     group.add_argument('-a', '--all', action='store_true', help="Show all columns")
     c_group = parser.add_argument_group('Individual Columns')
-    for col in ['size', 'dur', 'res', 'video', 'audio', 'subs', 'hdr', 'bitrate', 'depth', 'fps']:
+    for col in ['size', 'dur', 'res', 'nqi', 'video', 'audio', 'subs', 'hdr', 'bitrate', 'depth', 'fps']:
         c_group.add_argument(f'--{col}', action='store_true')
     c_group.add_argument('--lang_col', dest='lang_flag', action='store_true')
     args = parser.parse_args()
@@ -315,13 +377,13 @@ def main():
     if args.uninstall: handle_uninstall()
     if args.install: perform_installation()
 
-    ALL_COLS = ['SIZE', 'DUR', 'RES', 'VIDEO', 'BITRATE', 'FPS', 'DEPTH', 'AUDIO', 'LANG', 'SUBS', 'HDR']
+    ALL_COLS = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'BITRATE', 'FPS', 'DEPTH', 'AUDIO', 'LANG', 'SUBS', 'HDR']
     flag_map = {col: getattr(args, col.lower() if col != 'LANG' else 'lang_flag') for col in ALL_COLS}
     if any(flag_map.values()): active_cols = [c for c in ALL_COLS if flag_map[c]]
     elif args.all: active_cols = ALL_COLS
-    elif args.tech: active_cols = ['SIZE', 'DUR', 'BITRATE', 'RES', 'VIDEO', 'FPS', 'DEPTH', 'HDR', 'AUDIO']
-    elif args.lang: active_cols = ['DUR', 'AUDIO', 'LANG', 'SUBS']
-    else: active_cols = ['SIZE', 'DUR', 'RES', 'VIDEO', 'AUDIO', 'SUBS', 'HDR']
+    elif args.tech: active_cols = ['SIZE', 'DUR', 'BITRATE', 'RES', 'NQI', 'VIDEO', 'FPS', 'DEPTH', 'HDR', 'AUDIO']
+    elif args.lang: active_cols = ['DUR', 'NQI', 'AUDIO', 'LANG', 'SUBS']
+    else: active_cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'AUDIO', 'SUBS', 'HDR']
 
     files = get_files(args.paths)
     if not files: print("Error: No valid media files found."); sys.exit(1)

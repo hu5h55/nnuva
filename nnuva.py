@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "1.6.9"
+VERSION = "1.7.0"
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
 MAX_THREADS = min(32, (os.cpu_count() or 4) * 2)
 
@@ -44,12 +44,11 @@ EXPLANATIONS = {
 }
 
 # ==============================================================================
-# STRING FORMATTING & DISPLAY MATH (JIS/NFC/ZERO-WIDTH SAFE)
+# STRING FORMATTING & DISPLAY MATH
 # ==============================================================================
 
 def get_display_width(text):
     if not text: return 0
-    # Strip ANSI escape sequences for width calculation to prevent column skew
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
     clean_text = ansi_escape.sub('', str(text))
     text = unicodedata.normalize('NFC', clean_text)
@@ -69,12 +68,12 @@ def truncate(string, max_width):
     keep = (max_width - 3) // 2
     left, left_w = "", 0
     for c in string:
-        w = 0 if unicodedata.category(c) in ('Mn', 'Me', 'Cf') else (2 if unicodedata.east_asian_width(c) in 'WF' else 1)
+        w = 2 if unicodedata.east_asian_width(c) in 'WF' else 1
         if left_w + w <= keep: left += c; left_w += w
         else: break
     right, right_w = "", 0
     for c in reversed(string):
-        w = 0 if unicodedata.category(c) in ('Mn', 'Me', 'Cf') else (2 if unicodedata.east_asian_width(c) in 'WF' else 1)
+        w = 2 if unicodedata.east_asian_width(c) in 'WF' else 1
         if right_w + w <= keep: right = c + right; right_w += w
         else: break
     return left + "..." + right
@@ -85,10 +84,8 @@ def truncate(string, max_width):
 
 def format_size(size_bytes):
     if size_bytes == 0: return "0B"
-    # Logic: Cross 100GB -> Switch to TB (e.g. 102.4GB becomes 0.1TB)
     if size_bytes >= 100 * 1024**3:
         return f"{size_bytes / (1024**4):.1f}TB"
-    
     size_name = ("B", "KB", "MB", "GB", "TB")
     i = int(math.floor(math.log(size_bytes, 1024)))
     p = math.pow(1024, i)
@@ -129,7 +126,7 @@ def get_installed_version(target_path):
     except: return "Unknown"
     return None
 
-def perform_installation(is_update=False):
+def perform_installation():
     current_script = os.path.abspath(__file__)
     target_path = os.path.expanduser("~/.local/bin/nnuva")
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -149,8 +146,7 @@ def smart_install_prompt():
         resp = input(f"Update global install from v{inst_ver or 'N/A'} to v{VERSION}? [y/N]: ").strip().lower()
         if resp in ['y', 'yes']: perform_installation()
     except KeyboardInterrupt:
-        print("\nAborted.")
-        sys.exit(1)
+        print("\nAborted."); sys.exit(1)
 
 # ==============================================================================
 # CORE ENGINE
@@ -237,11 +233,8 @@ def style_folder_line(path_str, file_width, prefix=" ┌─ "):
     path_obj = Path(path_str)
     folder_name = f"{path_obj.name}/"
     parent_path = str(path_obj.parent)
-    if parent_path == ".": parent_path = ""
-    else: parent_path += "/"
-    # Build styled version
+    parent_path = "" if parent_path == "." else parent_path + "/"
     styled = f"{Color.GRAY}{Color.BOLD}{prefix}{parent_path}{Color.RESET}{Color.WHITE}{Color.BOLD}{folder_name}{Color.RESET}"
-    # Padding math using visual width only
     vis_width = get_display_width(f"{prefix}{parent_path}{folder_name}")
     return styled + (" " * max(0, file_width - vis_width))
 
@@ -281,9 +274,11 @@ def main():
                 sys.stdout.flush()
         sys.stdout.write('\r\033[K')
 
-    results.sort(key=lambda x: (0 if x['dir'] == "CURRENT DIRECTORY" else 1, x['dir'], x['file']))
-    dir_sizes = {d: sum(r['size_bytes'] for r in results if r['dir'] == d) for d in set(r['dir'] for r in results)}
+    # Alphabetical sort: Force CURRENT DIRECTORY to top, then case-insensitive dir, then file
+    results.sort(key=lambda x: (0 if x['dir'] == "CURRENT DIRECTORY" else 1, x['dir'].lower(), x['file'].lower()))
+    skipped.sort(key=str.lower)
 
+    dir_sizes = {d: sum(r['size_bytes'] for r in results if r['dir'] == d) for d in set(r['dir'] for r in results)}
     cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'AUDIO', 'SUBS', 'HDR']
     if args.all: cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'BITRATE', 'FPS', 'DEPTH', 'AUDIO', 'LANG', 'SUBS', 'HDR']
     
@@ -295,8 +290,8 @@ def main():
 
     print(f"{sep}\n{Color.BOLD}{pad_string('FILE', fw)}{Color.RESET}" + "".join([f"{div}{Color.BOLD}{pad_string(c, cw[c])}{Color.RESET}" for c in cols]) + f"\n{sep}")
     
-    dir_names = list(dict.fromkeys(r['dir'] for r in results))
-    for i, d in enumerate(dir_names):
+    grouped_dirs = list(dict.fromkeys(r['dir'] for r in results))
+    for i, d in enumerate(grouped_dirs):
         if i > 0: print((" " * fw) + "".join([f"{div}{' ' * cw[c]}" for c in cols]))
         row_str = style_folder_line(d, fw)
         for c in cols:
@@ -313,7 +308,7 @@ def main():
             print(row_str)
 
     if skipped and not args.recursive:
-        print((" " * fw) + "".join([f"{div}{' ' * cw[c]}" for c in cols]))
+        if results: print((" " * fw) + "".join([f"{div}{' ' * cw[c]}" for c in cols]))
         print(f"{Color.GRAY}{Color.BOLD}{pad_string(' ┌─ Unscanned Subdirectories/', fw)}{Color.RESET}" + "".join([f"{div}{' '*cw[c]}" for c in cols]))
         for k, s in enumerate(skipped):
             prefix = " └─ " if k == len(skipped)-1 else " ├─ "
@@ -322,4 +317,4 @@ def main():
 
 if __name__ == "__main__":
     try: main()
-    except KeyboardInterrupt: sys.stdout.write('\033[?25h\r\033[K'); print("\nAborted."); sys.exit(1)
+    except KeyboardInterrupt: print("\nAborted."); sys.exit(1)

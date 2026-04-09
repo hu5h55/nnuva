@@ -25,27 +25,31 @@ from typing import Optional
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "1.13.0"
+VERSION = "1.23.0"
 
 # Changelog:
-#   1.13.0 - Display dynamic changelog during smart install prompt
-#   1.12.2 - Hotfix: resolve unterminated string literal in Path globbing
-#   1.12.1 - Update NQI to use geometric blocks and 5 distinct colors (Blue tier 5)
-#   1.12.0 - Replace static NQI square with Braille progress indicator
-#   1.11.0 - Add --nqi-audio flag; disable audio NQI scoring by default and rebalance base score
-#   1.10.1 - Fix column width calculation to account for aggregate folder sizes
-#   1.10.0 - Refactor text alignment (right-align sizes/durations, center attributes)
-#   1.9.0  - Add -v / --version flag; truncate long folder names to fit columns
-#   1.8.0  - Perf & correctness pass: module-level regex, O(n) dir_sizes,
-#            typed signatures, fix bare except, ordered sub_codecs, explicit
-#            bitrate fallback, progress bar try/finally, --install flag
-#   1.7.0  - Initial public release
+#   1.23.0 - Fix rogue space causing misalignment in sub-folder tree branches
+#   1.22.0 - Simplify tree rendering to use clean indents without vertical lines
+#   1.21.0 - Remove top-level line prefix; align all items to left edge
+#   1.20.4 - Style folder names as bold white, prefix as gray; fix left border breaks
+#   1.20.3 - Simplify and fix tree view prefixes so directory blocks close correctly
+#   1.20.2 - Fix tree view prefix rendering; ensure continuous connecting lines
+#   1.20.1 - Fix gray folder bug on truncated names; properly indent tree view
+#   1.20.0 - Implement nested tree-view for subfolders to prevent broken layout blocks
+#   1.19.1 - Fix default arguments: make `nnuva` manually expand like `nnuva *`
+#   1.19.0 - Normalize default path behavior; ignore "Sample" folders and files
+#   1.17.0 - Handle PermissionError on iterdir; use os.walk for robust recursive scans
+#   1.16.0 - Change default scan depth to 1; remove "Unscanned Subdirectories" UI
+#   1.15.1 - Fix duplicate skipped directory listing; limit install changelog to 5 lines
+#   1.15.0 - Overhaul NQI visuals to 3-char "Tech Nodes" with starburst tier 5
+#   1.14.0 - Experimental branch: 2-character geometric indicators (superseded)
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
 MAX_THREADS = min(16, (os.cpu_count() or 4) * 2)
 
 class Color:
     RESET   = '\033[0m'
     BOLD    = '\033[1m'
+    BLACK   = '\033[30m'
     RED     = '\033[91m'
     GREEN   = '\033[92m'
     YELLOW  = '\033[93m'
@@ -202,12 +206,12 @@ def smart_install_prompt() -> None:
     if inst_ver == VERSION: return
     print(f'{Color.CYAN}NNUVA v{VERSION} (Current standalone){Color.RESET}')
     
-    # Read and print the changelog entries up to the currently installed version
     if inst_ver:
         try:
             with open(os.path.abspath(__file__), 'r', encoding='utf-8') as f:
                 in_changelog = False
                 changes_found = False
+                lines_printed = 0
                 for line in f:
                     if line.startswith('# Changelog:'):
                         in_changelog = True
@@ -215,19 +219,22 @@ def smart_install_prompt() -> None:
                     if in_changelog:
                         if not line.startswith('#'):
                             break
-                        # Extract the version number to check when to stop
                         match = re.search(r'#\s+([0-9]+\.[0-9]+\.[0-9]+)', line)
                         if match and match.group(1) == inst_ver:
+                            break
+                            
+                        if lines_printed >= 5:
+                            print(f'{Color.GRAY}  ...and earlier changes.{Color.RESET}')
                             break
                             
                         if not changes_found:
                             print(f'\n{Color.BOLD}What\'s new:{Color.RESET}')
                             changes_found = True
                             
-                        # Print the changelog line, stripping the initial '#' but keeping indentation
                         print(line.replace('#', '', 1).rstrip('\n'))
+                        lines_printed += 1
                 if changes_found:
-                    print() # Extra blank line before prompt
+                    print()
         except Exception:
             pass
 
@@ -243,6 +250,22 @@ def smart_install_prompt() -> None:
 # ==============================================================================
 # CORE ENGINE
 # ==============================================================================
+
+def is_valid_media(filepath: Path) -> bool:
+    if not filepath.is_file():
+        return False
+    if filepath.suffix.lower() not in SUPPORTED_EXTS:
+        return False
+    path_lower = str(filepath).lower()
+    if 'sample' in path_lower:
+        if re.search(r'(^|[\W_])sample([\W_]|$)', path_lower):
+            return False
+    return True
+
+def is_valid_dir(dirpath: Path) -> bool:
+    if dirpath.name.lower() == 'sample':
+        return False
+    return True
 
 def analyze_file(filepath: Path, nqi_audio: bool = False) -> dict:
     try:
@@ -389,16 +412,14 @@ def style_text(text: str, col_name: str) -> str:
     s = text.strip()
     if col_name == 'NQI' and s.isdigit():
         nqi_val = int(s)
-        # NQI mapped to Geometric Blocks: 1=✕, 2=▼, 3=■, 4=▲, 5=★
-        indicators = ['✕', '▼', '■', '▲', '★']
+        indicators = ['⬡⬡⬡', '⬢⬡⬡', '⬢⬢⬡', '⬢⬢⬢', '✸✸✸']
         colors = [Color.RED, Color.MAGENTA, Color.YELLOW, Color.GREEN, Color.BLUE]
         
         idx = min(4, max(0, nqi_val - 1))
         symbol = indicators[idx]
         c = colors[idx]
         
-        # Padded with spaces to maintain clean 3-character column width
-        return f'{c} {symbol} {Color.RESET}'
+        return f'{c}{symbol}{Color.RESET}'
         
     if s == '1080p': return f'{Color.YELLOW}{text}{Color.RESET}'
     if s in ('720p', '480p'): return f'{Color.RED}{text}{Color.RESET}'
@@ -406,36 +427,33 @@ def style_text(text: str, col_name: str) -> str:
     if any(x in text for x in ('4K', 'HEVC', 'AV1', '10b')): return f'{Color.GREEN}{text}{Color.RESET}'
     return text
 
-def style_folder_line(path_str: str, file_width: int, prefix: str = ' ┌─ ') -> str:
+def style_folder_line(path_str: str, file_width: int, prefix: str) -> str:
     if path_str == 'CURRENT DIRECTORY':
-        full      = f'{prefix}./'
-        truncated = truncate(full, file_width)
-        styled    = f'{Color.GRAY}{Color.BOLD}{prefix}{Color.RESET}{Color.WHITE}{Color.BOLD}./{Color.RESET}'
-        if get_display_width(full) > file_width:
-            styled = f'{Color.GRAY}{Color.BOLD}{truncated}{Color.RESET}'
-        return align_string(styled, file_width)
-
-    path_obj    = Path(path_str)
-    folder_name = f'{path_obj.name}/'
-    parent_path = str(path_obj.parent)
-    parent_path = '' if parent_path == '.' else parent_path + '/'
-    full        = f'{prefix}{parent_path}{folder_name}'
-
-    if get_display_width(full) <= file_width:
-        styled = f'{Color.GRAY}{Color.BOLD}{prefix}{parent_path}{Color.RESET}{Color.WHITE}{Color.BOLD}{folder_name}{Color.RESET}'
-        return align_string(styled, file_width)
-
-    truncated = truncate(full, file_width)
-    if truncated.endswith(folder_name):
-        pre    = truncated[: -len(folder_name)]
-        styled = f'{Color.GRAY}{Color.BOLD}{pre}{Color.RESET}{Color.WHITE}{Color.BOLD}{folder_name}{Color.RESET}'
+        folder_name = './'
     else:
-        styled = f'{Color.GRAY}{Color.BOLD}{truncated}{Color.RESET}'
+        path_obj = Path(path_str)
+        folder_name = f'{path_obj.name}/'
+
+    full_string = f'{prefix}{folder_name}'
+
+    if get_display_width(full_string) <= file_width:
+        styled = f'{Color.GRAY}{prefix}{Color.RESET}{Color.WHITE}{Color.BOLD}{folder_name}{Color.RESET}'
+        return align_string(styled, file_width)
+
+    truncated = truncate(full_string, file_width)
+    prefix_len = len(prefix)
+    if truncated.startswith(prefix):
+        rest_of_string = truncated[prefix_len:]
+        styled = f'{Color.GRAY}{prefix}{Color.RESET}{Color.WHITE}{Color.BOLD}{rest_of_string}{Color.RESET}'
+    else:
+        styled = f'{Color.WHITE}{Color.BOLD}{truncated}{Color.RESET}'
+        
     return align_string(styled, file_width)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=f'NNUVA v{VERSION} — video file analyzer')
-    parser.add_argument('paths', nargs='*', default=['.'])
+    
+    parser.add_argument('paths', nargs='*', default=[])
     parser.add_argument('-R', '--recursive', action='store_true')
     parser.add_argument('-a', '--all', action='store_true')
     parser.add_argument('-v', '--version', action='version', version=f'NNUVA v{VERSION}')
@@ -456,58 +474,104 @@ def main() -> None:
         print('Error: ffprobe missing')
         sys.exit(1)
 
+    if not args.paths:
+        try:
+            args.paths = [f.name for f in Path('.').iterdir() if not f.name.startswith('.')]
+        except Exception:
+            pass
+
     files:   list[Path] = []
-    skipped: list[str]  = []
 
     for p_str in args.paths:
         p = Path(p_str)
-        if not p.exists():
+        if '*' in p_str or '?' in p_str or not p.exists():
             for f in Path('.').glob(p_str):
-                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS:
+                if is_valid_media(f):
                     files.append(f)
+                elif f.is_dir() and is_valid_dir(f):
+                    try:
+                        for sub_item in f.iterdir():
+                            if is_valid_media(sub_item):
+                                files.append(sub_item)
+                    except PermissionError:
+                        pass
             continue
-        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS:
-            files.append(p)
+            
+        if p.is_file():
+            if is_valid_media(p):
+                files.append(p)
+            
         elif p.is_dir():
-            search = p.rglob('*') if args.recursive else p.glob('*')
-            for f in search:
-                if f.is_file() and f.suffix.lower() in SUPPORTED_EXTS:
-                    files.append(f)
-                elif f.is_dir() and not args.recursive:
-                    skipped.append(f.name)
+            if not is_valid_dir(p):
+                continue
+                
+            if args.recursive:
+                for root, dirs, files_in_root in os.walk(p):
+                    dirs[:] = [d for d in dirs if is_valid_dir(Path(d))]
+                    for fname in files_in_root:
+                        fpath = Path(root) / fname
+                        if is_valid_media(fpath):
+                            files.append(fpath)
+            else:
+                try:
+                    for item in p.iterdir():
+                        if is_valid_media(item):
+                            files.append(item)
+                        elif item.is_dir() and is_valid_dir(item):
+                            try:
+                                for sub_item in item.iterdir():
+                                    if is_valid_media(sub_item):
+                                        files.append(sub_item)
+                            except PermissionError:
+                                pass
+                except PermissionError:
+                    pass
 
-    if not files and not skipped:
-        print('Error: Nothing found')
+    unique_files = list(set(files))
+    
+    if not unique_files:
+        print(f'{Color.YELLOW}Error: No supported video files found in target paths{Color.RESET}')
         sys.exit(1)
 
     results: list[dict] = []
-    if files:
-        try:
-            with ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
-                futures = [ex.submit(analyze_file, f, args.nqi_audio) for f in files]
-                for i, fut in enumerate(as_completed(futures), 1):
-                    res = fut.result()
-                    if not res.get('skip'):
-                        results.append(res)
-                    sys.stdout.write(
-                        f'\r{Color.BOLD}Scanning {len(files)} files... '
-                        f'{int(i / len(files) * 100)}%{Color.RESET}'
-                    )
-                    sys.stdout.flush()
-        finally:
-            sys.stdout.write('\r\033[K')
-            sys.stdout.flush()
+    try:
+        with ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
+            futures = [ex.submit(analyze_file, f, args.nqi_audio) for f in unique_files]
+            for i, fut in enumerate(as_completed(futures), 1):
+                res = fut.result()
+                if not res.get('skip'):
+                    results.append(res)
+                sys.stdout.write(
+                    f'\r{Color.BOLD}Scanning {len(unique_files)} files... '
+                    f'{int(i / len(unique_files) * 100)}%{Color.RESET}'
+                )
+                sys.stdout.flush()
+    finally:
+        sys.stdout.write('\r\033[K')
+        sys.stdout.flush()
 
-    results.sort(key=lambda x: (
-        0 if x['dir'] == 'CURRENT DIRECTORY' else 1,
-        x['dir'].lower(),
-        x['file'].lower(),
-    ))
-    skipped.sort(key=str.lower)
-
-    dir_sizes: defaultdict[str, int] = defaultdict(int)
     for r in results:
-        dir_sizes[r['dir']] += r['size_bytes']
+        if r['dir'] == 'CURRENT DIRECTORY':
+            r['top_dir'] = 'CURRENT DIRECTORY'
+            r['sub_path'] = ''
+        else:
+            parts = Path(r['dir']).parts
+            r['top_dir'] = parts[0]
+            r['sub_path'] = str(Path(*parts[1:])) if len(parts) > 1 else ''
+
+    grouped_results = defaultdict(list)
+    for r in results:
+        grouped_results[r['top_dir']].append(r)
+
+    top_dirs = sorted(list(grouped_results.keys()), key=lambda x: (0 if x == 'CURRENT DIRECTORY' else 1, x.lower()))
+
+    top_dir_sizes = defaultdict(int)
+    sub_dir_sizes = defaultdict(int)
+    for r in results:
+        top_dir_sizes[r['top_dir']] += r['size_bytes']
+        if r['sub_path']:
+            sub_key = (r['top_dir'], r['sub_path'])
+            sub_dir_sizes[sub_key] += r['size_bytes']
 
     cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'AUDIO', 'SUBS', 'HDR']
     if args.all:
@@ -519,7 +583,8 @@ def main() -> None:
             get_display_width(c),
             get_display_width(EXPLANATIONS[c]),
             max((get_display_width(str(r.get(c, ''))) for r in results), default=0),
-            max((get_display_width(format_size(sz)) for sz in dir_sizes.values()), default=0) if c == 'SIZE' else 0
+            max((get_display_width(format_size(sz)) for sz in top_dir_sizes.values()), default=0) if c == 'SIZE' else 0,
+            max((get_display_width(format_size(sz)) for sz in sub_dir_sizes.values()), default=0) if c == 'SIZE' else 0
         )
         for c in cols
     }
@@ -535,41 +600,92 @@ def main() -> None:
         + f'\n{sep}'
     )
 
-    grouped_dirs = list(dict.fromkeys(r['dir'] for r in results))
-    for i, d in enumerate(grouped_dirs):
-        if i > 0:
+    for td_idx, td in enumerate(top_dirs):
+        if td_idx > 0:
             print((' ' * fw) + ''.join(f'{div}{" " * cw[c]}' for c in cols))
-        row_str = style_folder_line(d, fw)
+            
+        td_prefix = ' ' 
+        row_str = style_folder_line(td, fw, prefix=td_prefix)
         for c in cols:
             if c == 'SIZE':
-                row_str += f'{div}{Color.GRAY}{Color.BOLD}{align_string(format_size(dir_sizes[d]), cw[c], "right")}{Color.RESET}'
+                row_str += f'{div}{Color.GRAY}{Color.BOLD}{align_string(format_size(top_dir_sizes[td]), cw[c], "right")}{Color.RESET}'
             else:
                 row_str += f'{div}{align_string("", cw[c])}'
         print(row_str)
-
-        files_in_dir = [r for r in results if r['dir'] == d]
-        for j, r in enumerate(files_in_dir):
-            prefix  = ' └─ ' if j == len(files_in_dir) - 1 else ' ├─ '
-            row_str = align_string(truncate(f'{prefix}{r["file"]}', fw), fw)
-            for c in cols:
-                raw_val = r.get(c, "N/A")
-                styled_val = style_text(str(raw_val), c)
-                row_str += f'{div}{align_string(styled_val, cw[c], get_align(c))}'
-            print(row_str)
-
-    if skipped and not args.recursive:
-        if results:
-            print((' ' * fw) + ''.join(f'{div}{" " * cw[c]}' for c in cols))
-        print(
-            f'{Color.GRAY}{Color.BOLD}{align_string(" ┌─ Unscanned Subdirectories/", fw)}{Color.RESET}'
-            + ''.join(f'{div}{" " * cw[c]}' for c in cols)
-        )
-        for k, s in enumerate(skipped):
-            prefix = ' └─ ' if k == len(skipped) - 1 else ' ├─ '
-            print(
-                f'{Color.GRAY}{Color.BOLD}{align_string(prefix + s + "/", fw)}{Color.RESET}'
-                + ''.join(f'{div}{" " * cw[c]}' for c in cols)
-            )
+        
+        files_in_td = grouped_results[td]
+        
+        loose_files = [r for r in files_in_td if r['sub_path'] == '']
+        sub_dirs = sorted(list(set(r['sub_path'] for r in files_in_td if r['sub_path'] != '')), key=str.lower)
+        
+        direct_children = []
+        for lf in loose_files:
+            direct_children.append({'type': 'file', 'name': lf['file'], 'data': lf})
+        for sd in sub_dirs:
+            direct_children.append({'type': 'dir', 'name': sd})
+            
+        direct_children.sort(key=lambda x: x['name'].lower())
+        
+        for c_idx, child in enumerate(direct_children):
+            is_last_child = (c_idx == len(direct_children) - 1)
+            child_prefix = ' └─ ' if is_last_child else ' ├─ '
+            
+            if child['type'] == 'file':
+                r = child['data']
+                styled_prefix = f'{Color.GRAY}{child_prefix}{Color.RESET}'
+                display_name = f'{child_prefix}{r["file"]}'
+                
+                if get_display_width(display_name) <= fw:
+                    padded_name = r["file"]
+                else:
+                    truncated = truncate(display_name, fw)
+                    padded_name = truncated[len(child_prefix):]
+                    
+                row_str = align_string(f'{styled_prefix}{padded_name}', fw)
+                for c in cols:
+                    raw_val = r.get(c, "N/A")
+                    styled_val = style_text(str(raw_val), c)
+                    row_str += f'{div}{align_string(styled_val, cw[c], get_align(c))}'
+                print(row_str)
+                
+            elif child['type'] == 'dir':
+                sd_name = child['name']
+                sd_row_str = style_folder_line(sd_name, fw, prefix=child_prefix)
+                for c in cols:
+                    if c == 'SIZE':
+                        sd_size = sub_dir_sizes[(td, sd_name)]
+                        sd_row_str += f'{div}{Color.GRAY}{Color.BOLD}{align_string(format_size(sd_size), cw[c], "right")}{Color.RESET}'
+                    else:
+                        sd_row_str += f'{div}{align_string("", cw[c])}'
+                print(sd_row_str)
+                
+                sd_files = [r for r in files_in_td if r['sub_path'] == sd_name]
+                sd_files.sort(key=lambda x: x['file'].lower())
+                
+                for f_idx, r in enumerate(sd_files):
+                    is_last_sub_file = (f_idx == len(sd_files) - 1)
+                    
+                    gc_base = '    ' if is_last_child else ' │  '
+                    gc_branch = '└─ ' if is_last_sub_file else '├─ '
+                    
+                    # Removed the rogue space: f'{gc_base}{gc_branch}' instead of f' {gc_base}{gc_branch}'
+                    gc_prefix = f'{gc_base}{gc_branch}'
+                    
+                    styled_prefix = f'{Color.GRAY}{gc_prefix}{Color.RESET}'
+                    display_name = f'{gc_prefix}{r["file"]}'
+                    
+                    if get_display_width(display_name) <= fw:
+                        padded_name = r["file"]
+                    else:
+                        truncated = truncate(display_name, fw)
+                        padded_name = truncated[len(gc_prefix):]
+                        
+                    f_row_str = align_string(f'{styled_prefix}{padded_name}', fw)
+                    for c in cols:
+                        raw_val = r.get(c, "N/A")
+                        styled_val = style_text(str(raw_val), c)
+                        f_row_str += f'{div}{align_string(styled_val, cw[c], get_align(c))}'
+                    print(f_row_str)
 
     print(
         f'{sep}\n{align_string(" ", fw)}'

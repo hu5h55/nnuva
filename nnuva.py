@@ -25,9 +25,12 @@ from typing import Optional
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "1.23.0"
+VERSION = "1.26.0"
 
 # Changelog:
+#   1.26.0 - Fix ThreadPool hanging on Ctrl+C; forcefully kill queued background tasks
+#   1.25.0 - Increase default scan depth to 2 to support Show/Season/Episode structures
+#   1.24.0 - Add 256-color Orange for NQI L2; update L5 indicator to `-⬢-`
 #   1.23.0 - Fix rogue space causing misalignment in sub-folder tree branches
 #   1.22.0 - Simplify tree rendering to use clean indents without vertical lines
 #   1.21.0 - Remove top-level line prefix; align all items to left edge
@@ -40,9 +43,6 @@ VERSION = "1.23.0"
 #   1.19.0 - Normalize default path behavior; ignore "Sample" folders and files
 #   1.17.0 - Handle PermissionError on iterdir; use os.walk for robust recursive scans
 #   1.16.0 - Change default scan depth to 1; remove "Unscanned Subdirectories" UI
-#   1.15.1 - Fix duplicate skipped directory listing; limit install changelog to 5 lines
-#   1.15.0 - Overhaul NQI visuals to 3-char "Tech Nodes" with starburst tier 5
-#   1.14.0 - Experimental branch: 2-character geometric indicators (superseded)
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
 MAX_THREADS = min(16, (os.cpu_count() or 4) * 2)
 
@@ -51,6 +51,7 @@ class Color:
     BOLD    = '\033[1m'
     BLACK   = '\033[30m'
     RED     = '\033[91m'
+    ORANGE  = '\033[38;5;208m'
     GREEN   = '\033[92m'
     YELLOW  = '\033[93m'
     BLUE    = '\033[94m'
@@ -245,7 +246,7 @@ def smart_install_prompt() -> None:
             sys.exit(0)
     except KeyboardInterrupt:
         print('\nAborted.')
-        sys.exit(1)
+        os._exit(1) # Hard exit
 
 # ==============================================================================
 # CORE ENGINE
@@ -412,8 +413,8 @@ def style_text(text: str, col_name: str) -> str:
     s = text.strip()
     if col_name == 'NQI' and s.isdigit():
         nqi_val = int(s)
-        indicators = ['⬡⬡⬡', '⬢⬡⬡', '⬢⬢⬡', '⬢⬢⬢', '✸✸✸']
-        colors = [Color.RED, Color.MAGENTA, Color.YELLOW, Color.GREEN, Color.BLUE]
+        indicators = ['⬡⬡⬡', '⬢⬡⬡', '⬢⬢⬡', '⬢⬢⬢', '-⬢-']
+        colors = [Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.CYAN]
         
         idx = min(4, max(0, nqi_val - 1))
         symbol = indicators[idx]
@@ -513,19 +514,21 @@ def main() -> None:
                         if is_valid_media(fpath):
                             files.append(fpath)
             else:
-                try:
-                    for item in p.iterdir():
-                        if is_valid_media(item):
-                            files.append(item)
-                        elif item.is_dir() and is_valid_dir(item):
-                            try:
-                                for sub_item in item.iterdir():
-                                    if is_valid_media(sub_item):
-                                        files.append(sub_item)
-                            except PermissionError:
-                                pass
-                except PermissionError:
-                    pass
+                base_depth = len(p.parts)
+                for root, dirs, files_in_root in os.walk(p):
+                    current_depth = len(Path(root).parts)
+                    depth_diff = current_depth - base_depth
+                    
+                    if depth_diff >= 2:
+                        dirs[:] = []
+                        continue
+                        
+                    dirs[:] = [d for d in dirs if is_valid_dir(Path(root) / d)]
+                    
+                    for fname in files_in_root:
+                        fpath = Path(root) / fname
+                        if is_valid_media(fpath):
+                            files.append(fpath)
 
     unique_files = list(set(files))
     
@@ -534,21 +537,32 @@ def main() -> None:
         sys.exit(1)
 
     results: list[dict] = []
+    
+    # We define the executor outside the 'with' block so we can manually kill it if interrupted
+    executor = ThreadPoolExecutor(max_workers=MAX_THREADS)
+    futures = [executor.submit(analyze_file, f, args.nqi_audio) for f in unique_files]
+    
     try:
-        with ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
-            futures = [ex.submit(analyze_file, f, args.nqi_audio) for f in unique_files]
-            for i, fut in enumerate(as_completed(futures), 1):
-                res = fut.result()
-                if not res.get('skip'):
-                    results.append(res)
-                sys.stdout.write(
-                    f'\r{Color.BOLD}Scanning {len(unique_files)} files... '
-                    f'{int(i / len(unique_files) * 100)}%{Color.RESET}'
-                )
-                sys.stdout.flush()
+        for i, fut in enumerate(as_completed(futures), 1):
+            res = fut.result()
+            if not res.get('skip'):
+                results.append(res)
+            sys.stdout.write(
+                f'\r{Color.BOLD}Scanning {len(unique_files)} files... '
+                f'{int(i / len(unique_files) * 100)}%{Color.RESET}'
+            )
+            sys.stdout.flush()
+    except KeyboardInterrupt:
+        sys.stdout.write('\r\033[K')
+        sys.stdout.flush()
+        print(f'{Color.RED}Aborted by user. Halting background tasks...{Color.RESET}')
+        # Python 3.9+ cancel_futures safely kills un-started tasks
+        executor.shutdown(wait=False, cancel_futures=True)
+        os._exit(1) # Hard exit to bypass ThreadPool's default hanging atexit hook
     finally:
         sys.stdout.write('\r\033[K')
         sys.stdout.flush()
+        executor.shutdown(wait=False)
 
     for r in results:
         if r['dir'] == 'CURRENT DIRECTORY':
@@ -668,7 +682,6 @@ def main() -> None:
                     gc_base = '    ' if is_last_child else ' │  '
                     gc_branch = '└─ ' if is_last_sub_file else '├─ '
                     
-                    # Removed the rogue space: f'{gc_base}{gc_branch}' instead of f' {gc_base}{gc_branch}'
                     gc_prefix = f'{gc_base}{gc_branch}'
                     
                     styled_prefix = f'{Color.GRAY}{gc_prefix}{Color.RESET}'
@@ -698,5 +711,5 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print('\nAborted.')
-        sys.exit(1)
+        print(f'\n{Color.RED}Aborted.{Color.RESET}')
+        os._exit(1)

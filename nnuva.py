@@ -25,28 +25,35 @@ from typing import Optional
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "1.9.0"
+VERSION = "1.13.0"
 
 # Changelog:
-#   1.9.0 - Add -v / --version flag; truncate long folder names to fit columns
-#   1.8.0 - Perf & correctness pass: module-level regex, O(n) dir_sizes,
+#   1.13.0 - Display dynamic changelog during smart install prompt
+#   1.12.2 - Hotfix: resolve unterminated string literal in Path globbing
+#   1.12.1 - Update NQI to use geometric blocks and 5 distinct colors (Blue tier 5)
+#   1.12.0 - Replace static NQI square with Braille progress indicator
+#   1.11.0 - Add --nqi-audio flag; disable audio NQI scoring by default and rebalance base score
+#   1.10.1 - Fix column width calculation to account for aggregate folder sizes
+#   1.10.0 - Refactor text alignment (right-align sizes/durations, center attributes)
+#   1.9.0  - Add -v / --version flag; truncate long folder names to fit columns
+#   1.8.0  - Perf & correctness pass: module-level regex, O(n) dir_sizes,
 #            typed signatures, fix bare except, ordered sub_codecs, explicit
 #            bitrate fallback, progress bar try/finally, --install flag
-#   1.7.0 - Initial public release
+#   1.7.0  - Initial public release
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
-# ffprobe is I/O-bound (subprocess + disk reads), not CPU-bound, so a thread
-# count above cpu_count*2 is fine; cap at 16 to avoid saturating the disk.
 MAX_THREADS = min(16, (os.cpu_count() or 4) * 2)
 
 class Color:
-    RESET  = '\033[0m'
-    BOLD   = '\033[1m'
-    RED    = '\033[91m'
-    GREEN  = '\033[92m'
-    YELLOW = '\033[93m'
-    CYAN   = '\033[96m'
-    GRAY   = '\033[90m'
-    WHITE  = '\033[97m'
+    RESET   = '\033[0m'
+    BOLD    = '\033[1m'
+    RED     = '\033[91m'
+    GREEN   = '\033[92m'
+    YELLOW  = '\033[93m'
+    BLUE    = '\033[94m'
+    MAGENTA = '\033[95m'
+    CYAN    = '\033[96m'
+    GRAY    = '\033[90m'
+    WHITE   = '\033[97m'
 
 EXPLANATIONS = {
     'SIZE': 'Size', 'DUR': 'Runtime', 'RES': 'Res', 'NQI': 'NQI',
@@ -54,7 +61,6 @@ EXPLANATIONS = {
     'AUDIO': 'Audio', 'LANG': 'Lang', 'SUBS': 'Subs', 'HDR': 'HDR'
 }
 
-# Compiled once at module level — reused on every get_display_width call.
 _ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 # ==============================================================================
@@ -71,8 +77,19 @@ def get_display_width(text: str) -> int:
         width += 2 if unicodedata.east_asian_width(c) in 'WF' else 1
     return width
 
-def pad_string(text: str, target_width: int) -> str:
-    return str(text) + (' ' * max(0, target_width - get_display_width(text)))
+def align_string(text: str, target_width: int, align: str = 'left') -> str:
+    text_str = str(text)
+    w = get_display_width(text_str)
+    pad = max(0, target_width - w)
+    
+    if align == 'right':
+        return (' ' * pad) + text_str
+    elif align == 'center':
+        pad_left = pad // 2
+        pad_right = pad - pad_left
+        return (' ' * pad_left) + text_str + (' ' * pad_right)
+    else:
+        return text_str + (' ' * pad)
 
 def truncate(string: str, max_width: int) -> str:
     string = unicodedata.normalize('NFC', str(string))
@@ -118,19 +135,18 @@ def calculate_quality_score(
     v_codec: str,
     hdr_label: str,
     a_codec: str,
+    score_audio: bool = False
 ) -> str:
     if not bitrate or res_label == 'N/A':
         return 'N/A'
 
-    # Efficiency factor: modern codecs deliver equivalent quality at lower bitrates.
     if any(x in v_codec for x in ['HEVC', 'H265']):
-        eff = 0.5   # ~50% more efficient than H.264
+        eff = 0.5
     elif 'AV1' in v_codec:
-        eff = 0.4   # ~60% more efficient than H.264
+        eff = 0.4
     else:
-        eff = 1.0   # H.264 / baseline reference
+        eff = 1.0
 
-    # Reference "good quality" kbps targets for H.264; scaled down by eff for modern codecs.
     if '4K' in res_label:
         target_kbps = 25000
     elif '1080p' in res_label:
@@ -141,15 +157,16 @@ def calculate_quality_score(
 
     actual_kbps = float(bitrate) / 1000
     ratio = actual_kbps / target_kbps
-    score = min(3.5, ratio * 3.5)   # bitrate contribution caps at 3.5
+    
+    base_max = 3.5 if score_audio else 4.0
+    score = min(base_max, ratio * base_max)
 
-    # Bonus points for premium attributes (total possible: 5.0)
     if '4K' in res_label:
         score += 0.5
     if any(x in hdr_label for x in ['HDR', 'DV', '10b']):
         score += 0.5
-    if any(x in a_codec for x in ['TRUEHD', 'DTS-HD', 'FLAC']):
-        score += 0.5   # lossless audio
+    if score_audio and any(x in a_codec for x in ['TRUEHD', 'DTS-HD', 'FLAC']):
+        score += 0.5
 
     return str(int(round(min(5.0, max(1.0, score)))))
 
@@ -169,7 +186,6 @@ def get_installed_version(target_path: str) -> Optional[str]:
     return None
 
 def perform_installation() -> bool:
-    """Copy this script to ~/.local/bin/nnuva. Returns True on success."""
     current_script = os.path.abspath(__file__)
     target_path = os.path.expanduser('~/.local/bin/nnuva')
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -179,13 +195,42 @@ def perform_installation() -> bool:
     return True
 
 def smart_install_prompt() -> None:
-    """Offer an interactive update when running as a standalone script."""
     if not sys.stdout.isatty(): return
     target_path = os.path.expanduser('~/.local/bin/nnuva')
     if os.path.abspath(__file__) == target_path: return
     inst_ver = get_installed_version(target_path)
     if inst_ver == VERSION: return
     print(f'{Color.CYAN}NNUVA v{VERSION} (Current standalone){Color.RESET}')
+    
+    # Read and print the changelog entries up to the currently installed version
+    if inst_ver:
+        try:
+            with open(os.path.abspath(__file__), 'r', encoding='utf-8') as f:
+                in_changelog = False
+                changes_found = False
+                for line in f:
+                    if line.startswith('# Changelog:'):
+                        in_changelog = True
+                        continue
+                    if in_changelog:
+                        if not line.startswith('#'):
+                            break
+                        # Extract the version number to check when to stop
+                        match = re.search(r'#\s+([0-9]+\.[0-9]+\.[0-9]+)', line)
+                        if match and match.group(1) == inst_ver:
+                            break
+                            
+                        if not changes_found:
+                            print(f'\n{Color.BOLD}What\'s new:{Color.RESET}')
+                            changes_found = True
+                            
+                        # Print the changelog line, stripping the initial '#' but keeping indentation
+                        print(line.replace('#', '', 1).rstrip('\n'))
+                if changes_found:
+                    print() # Extra blank line before prompt
+        except Exception:
+            pass
+
     try:
         resp = input(f'Update global install from v{inst_ver or "N/A"} to v{VERSION}? [y/N]: ').strip().lower()
         if resp in ['y', 'yes']:
@@ -199,7 +244,7 @@ def smart_install_prompt() -> None:
 # CORE ENGINE
 # ==============================================================================
 
-def analyze_file(filepath: Path) -> dict:
+def analyze_file(filepath: Path, nqi_audio: bool = False) -> dict:
     try:
         rel_dir = filepath.parent.relative_to(Path.cwd())
         dir_name = str(rel_dir)
@@ -239,8 +284,6 @@ def analyze_file(filepath: Path) -> dict:
     fmt     = data.get('format', {})
     dur_raw = fmt.get('duration')
 
-    # Explicit precedence: prefer container-reported bitrate, fall back to
-    # size/duration estimate, then give up.
     raw_bitrate = fmt.get('bit_rate')
     if raw_bitrate:
         bitrate: Optional[float] = float(raw_bitrate)
@@ -256,7 +299,6 @@ def analyze_file(filepath: Path) -> dict:
     a_codec, a_ch            = 'N/A', ''
     audio_langs: list[str]   = []
     sub_langs:   list[str]   = []
-    # List (not set) so insertion order is preserved and output is deterministic.
     sub_codecs:  list[str]   = []
     has_video = False
 
@@ -331,7 +373,7 @@ def analyze_file(filepath: Path) -> dict:
         'SIZE':    format_size(size_bytes),
         'DUR':     format_duration(dur_raw),
         'RES':     res_label,
-        'NQI':     calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_full),
+        'NQI':     calculate_quality_score(bitrate, res_label, v_codec, hdr_label, a_full, nqi_audio),
         'VIDEO':   v_codec,
         'AUDIO':   a_full,
         'SUBS':    sub_codecs[0] if sub_codecs else '',
@@ -346,8 +388,18 @@ def style_text(text: str, col_name: str) -> str:
     if not text: return text
     s = text.strip()
     if col_name == 'NQI' and s.isdigit():
-        c = Color.GREEN if int(s) >= 4 else Color.YELLOW if int(s) >= 3 else Color.RED
-        return f'{c}■{Color.RESET}' + (' ' * (len(text) - 1))
+        nqi_val = int(s)
+        # NQI mapped to Geometric Blocks: 1=✕, 2=▼, 3=■, 4=▲, 5=★
+        indicators = ['✕', '▼', '■', '▲', '★']
+        colors = [Color.RED, Color.MAGENTA, Color.YELLOW, Color.GREEN, Color.BLUE]
+        
+        idx = min(4, max(0, nqi_val - 1))
+        symbol = indicators[idx]
+        c = colors[idx]
+        
+        # Padded with spaces to maintain clean 3-character column width
+        return f'{c} {symbol} {Color.RESET}'
+        
     if s == '1080p': return f'{Color.YELLOW}{text}{Color.RESET}'
     if s in ('720p', '480p'): return f'{Color.RED}{text}{Color.RESET}'
     if any(x in text for x in ('ERROR', 'CORRUPT', '[BURN]')): return f'{Color.BOLD}{Color.RED}{text}{Color.RESET}'
@@ -355,14 +407,13 @@ def style_text(text: str, col_name: str) -> str:
     return text
 
 def style_folder_line(path_str: str, file_width: int, prefix: str = ' ┌─ ') -> str:
-    # Guard: "CURRENT DIRECTORY" is a sentinel, not a real filesystem path.
     if path_str == 'CURRENT DIRECTORY':
         full      = f'{prefix}./'
         truncated = truncate(full, file_width)
         styled    = f'{Color.GRAY}{Color.BOLD}{prefix}{Color.RESET}{Color.WHITE}{Color.BOLD}./{Color.RESET}'
         if get_display_width(full) > file_width:
             styled = f'{Color.GRAY}{Color.BOLD}{truncated}{Color.RESET}'
-        return pad_string(styled, file_width)
+        return align_string(styled, file_width)
 
     path_obj    = Path(path_str)
     folder_name = f'{path_obj.name}/'
@@ -370,22 +421,17 @@ def style_folder_line(path_str: str, file_width: int, prefix: str = ' ┌─ ') 
     parent_path = '' if parent_path == '.' else parent_path + '/'
     full        = f'{prefix}{parent_path}{folder_name}'
 
-    # No truncation needed — use the original two-tone styling.
     if get_display_width(full) <= file_width:
         styled = f'{Color.GRAY}{Color.BOLD}{prefix}{parent_path}{Color.RESET}{Color.WHITE}{Color.BOLD}{folder_name}{Color.RESET}'
-        return pad_string(styled, file_width)
+        return align_string(styled, file_width)
 
-    # Truncate first (plain text), then re-apply styling.
-    # truncate() preserves both ends, so folder_name at the tail is kept when
-    # it fits in the keep-right half — restore two-tone if we can detect the split.
     truncated = truncate(full, file_width)
     if truncated.endswith(folder_name):
         pre    = truncated[: -len(folder_name)]
         styled = f'{Color.GRAY}{Color.BOLD}{pre}{Color.RESET}{Color.WHITE}{Color.BOLD}{folder_name}{Color.RESET}'
     else:
-        # folder_name itself was truncated — uniform style is the only safe option.
         styled = f'{Color.GRAY}{Color.BOLD}{truncated}{Color.RESET}'
-    return pad_string(styled, file_width)
+    return align_string(styled, file_width)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=f'NNUVA v{VERSION} — video file analyzer')
@@ -393,18 +439,17 @@ def main() -> None:
     parser.add_argument('-R', '--recursive', action='store_true')
     parser.add_argument('-a', '--all', action='store_true')
     parser.add_argument('-v', '--version', action='version', version=f'NNUVA v{VERSION}')
+    parser.add_argument('--nqi-audio', action='store_true', help='Include lossless audio bonus in NQI calculation')
     parser.add_argument(
         '--install', action='store_true',
         help='Install/update NNUVA to ~/.local/bin/nnuva and exit',
     )
     args = parser.parse_args()
 
-    # Explicit install flag — no side-effectful auto-prompt needed here.
     if args.install:
         perform_installation()
         sys.exit(0)
 
-    # Interactive prompt only when running as a one-off standalone script.
     smart_install_prompt()
 
     if not shutil.which('ffprobe'):
@@ -439,7 +484,7 @@ def main() -> None:
     if files:
         try:
             with ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
-                futures = [ex.submit(analyze_file, f) for f in files]
+                futures = [ex.submit(analyze_file, f, args.nqi_audio) for f in files]
                 for i, fut in enumerate(as_completed(futures), 1):
                     res = fut.result()
                     if not res.get('skip'):
@@ -450,11 +495,9 @@ def main() -> None:
                     )
                     sys.stdout.flush()
         finally:
-            # Always clear the progress line, even when interrupted mid-scan.
             sys.stdout.write('\r\033[K')
             sys.stdout.flush()
 
-    # Alphabetical sort: force CURRENT DIRECTORY to top, then dir, then filename.
     results.sort(key=lambda x: (
         0 if x['dir'] == 'CURRENT DIRECTORY' else 1,
         x['dir'].lower(),
@@ -462,7 +505,6 @@ def main() -> None:
     ))
     skipped.sort(key=str.lower)
 
-    # Single-pass O(n) aggregation instead of the original O(n²) comprehension.
     dir_sizes: defaultdict[str, int] = defaultdict(int)
     for r in results:
         dir_sizes[r['dir']] += r['size_bytes']
@@ -476,7 +518,8 @@ def main() -> None:
         c: max(
             get_display_width(c),
             get_display_width(EXPLANATIONS[c]),
-            max((get_display_width(r.get(c, '')) for r in results), default=0),
+            max((get_display_width(str(r.get(c, ''))) for r in results), default=0),
+            max((get_display_width(format_size(sz)) for sz in dir_sizes.values()), default=0) if c == 'SIZE' else 0
         )
         for c in cols
     }
@@ -484,9 +527,11 @@ def main() -> None:
     sep = f'{Color.GRAY}{"-" * tw}{Color.RESET}'
     div = f' {Color.GRAY}|{Color.RESET} '
 
+    get_align = lambda c: 'right' if c in ('SIZE', 'DUR') else 'center'
+
     print(
-        f'{sep}\n{Color.BOLD}{pad_string("FILE", fw)}{Color.RESET}'
-        + ''.join(f'{div}{Color.BOLD}{pad_string(c, cw[c])}{Color.RESET}' for c in cols)
+        f'{sep}\n{Color.BOLD}{align_string("FILE", fw)}{Color.RESET}'
+        + ''.join(f'{div}{Color.BOLD}{align_string(c, cw[c], get_align(c))}{Color.RESET}' for c in cols)
         + f'\n{sep}'
     )
 
@@ -497,36 +542,38 @@ def main() -> None:
         row_str = style_folder_line(d, fw)
         for c in cols:
             if c == 'SIZE':
-                row_str += f'{div}{Color.GRAY}{Color.BOLD}{pad_string(format_size(dir_sizes[d]), cw[c])}{Color.RESET}'
+                row_str += f'{div}{Color.GRAY}{Color.BOLD}{align_string(format_size(dir_sizes[d]), cw[c], "right")}{Color.RESET}'
             else:
-                row_str += f'{div}{pad_string("", cw[c])}'
+                row_str += f'{div}{align_string("", cw[c])}'
         print(row_str)
 
         files_in_dir = [r for r in results if r['dir'] == d]
         for j, r in enumerate(files_in_dir):
             prefix  = ' └─ ' if j == len(files_in_dir) - 1 else ' ├─ '
-            row_str = pad_string(truncate(f'{prefix}{r["file"]}', fw), fw)
+            row_str = align_string(truncate(f'{prefix}{r["file"]}', fw), fw)
             for c in cols:
-                row_str += f'{div}{style_text(pad_string(r.get(c, "N/A"), cw[c]), c)}'
+                raw_val = r.get(c, "N/A")
+                styled_val = style_text(str(raw_val), c)
+                row_str += f'{div}{align_string(styled_val, cw[c], get_align(c))}'
             print(row_str)
 
     if skipped and not args.recursive:
         if results:
             print((' ' * fw) + ''.join(f'{div}{" " * cw[c]}' for c in cols))
         print(
-            f'{Color.GRAY}{Color.BOLD}{pad_string(" ┌─ Unscanned Subdirectories/", fw)}{Color.RESET}'
+            f'{Color.GRAY}{Color.BOLD}{align_string(" ┌─ Unscanned Subdirectories/", fw)}{Color.RESET}'
             + ''.join(f'{div}{" " * cw[c]}' for c in cols)
         )
         for k, s in enumerate(skipped):
             prefix = ' └─ ' if k == len(skipped) - 1 else ' ├─ '
             print(
-                f'{Color.GRAY}{Color.BOLD}{pad_string(prefix + s + "/", fw)}{Color.RESET}'
+                f'{Color.GRAY}{Color.BOLD}{align_string(prefix + s + "/", fw)}{Color.RESET}'
                 + ''.join(f'{div}{" " * cw[c]}' for c in cols)
             )
 
     print(
-        f'{sep}\n{pad_string(" ", fw)}'
-        + ''.join(f'{div}{Color.GRAY}{pad_string(EXPLANATIONS[c], cw[c])}{Color.RESET}' for c in cols)
+        f'{sep}\n{align_string(" ", fw)}'
+        + ''.join(f'{div}{Color.GRAY}{align_string(EXPLANATIONS[c], cw[c], get_align(c))}{Color.RESET}' for c in cols)
         + f'\n{sep}'
     )
 

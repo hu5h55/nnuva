@@ -1,0 +1,968 @@
+#!/usr/bin/env python3
+
+# nnuva-report: The NNUVA Interactive Dashboard Generator
+# Parses the local NNUVA cache using nnuva's internal engine to generate a zero-server HTML dashboard.
+
+import sys
+import os
+import json
+import importlib.util
+import copy
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta
+
+VERSION = "2.9.23"
+
+# --- Dynamic Import of NNUVA ---
+def load_nnuva_module():
+    home_dir = Path.home()
+    target_path = home_dir / '.local' / 'bin' / 'nnuva'
+    
+    if not target_path.exists():
+        target_path = home_dir / 'bin' / 'nnuva'
+        
+    if not target_path.exists():
+        target_path = Path.cwd() / 'nnuva'
+        
+    if not target_path.exists():
+        return None
+
+    loader = SourceFileLoader("nnuva", str(target_path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    nnuva = importlib.util.module_from_spec(spec)
+    sys.modules["nnuva"] = nnuva
+    loader.exec_module(nnuva)
+    
+    return nnuva
+
+def get_top_categories(counter_obj, max_categories=5):
+    if len(counter_obj) <= max_categories:
+        return list(counter_obj.keys()), list(counter_obj.values())
+    
+    most_common = counter_obj.most_common(max_categories - 1)
+    labels = [k for k, v in most_common]
+    data = [v for k, v in most_common]
+    
+    others_sum = sum(v for k, v in counter_obj.most_common()[max_categories - 1:])
+    labels.append("Others")
+    data.append(others_sum)
+    
+    return labels, data
+
+def update_history(current_stats):
+    """Appends a daily snapshot to the history ledger."""
+    history_file = Path.home() / '.nnuva' / 'history.json'
+    history_data = []
+    
+    if history_file.exists():
+        try:
+            with open(history_file, 'r', encoding='utf-8') as f:
+                history_data = json.load(f)
+        except Exception:
+            pass
+
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    
+    if history_data and history_data[-1].get('date') == today_str:
+        history_data[-1] = current_stats
+    else:
+        history_data.append(current_stats)
+        
+    history_data = history_data[-90:]
+
+    try:
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history_data, f, indent=2)
+    except Exception as e:
+        print(f"Warning: Could not save history ledger: {e}")
+        
+    return history_data
+
+def generate_report():
+    print(f"nnuva-report v{VERSION}")
+    
+    nnuva = load_nnuva_module()
+    if not nnuva:
+        print("Error: Could not locate the 'nnuva' executable to load parsing engine.")
+        return
+
+    cache_file = Path.home() / '.nnuva' / 'ffprobe_cache.json'
+    history_file = Path.home() / '.nnuva' / 'history.json'
+    
+    if not cache_file.exists():
+        print("Error: NNUVA cache not found. Run a scan with 'nnuva' first.")
+        return
+
+    try:
+        cache_stat = cache_file.stat()
+        cache_size_mb = round(cache_stat.st_size / (1024 * 1024), 2)
+        cache_mtime = datetime.fromtimestamp(cache_stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        cache_size_mb = 0
+        cache_mtime = "Unknown"
+
+    try:
+        with open(cache_file, 'r', encoding='utf-8') as f:
+            cache_data = json.load(f)
+    except Exception as e:
+        print(f"Error reading cache: {e}")
+        return
+
+    if not cache_data:
+        print("Cache is empty. Nothing to report.")
+        return
+
+    print("Parsing raw ffprobe data via nnuva engine...")
+    
+    total_files = 0
+    total_bytes = 0
+    
+    res_counts = Counter()
+    res_size_bytes = defaultdict(int)
+    nqi_counts = Counter()
+    nqi_size_bytes = defaultdict(int)
+    
+    all_files = []
+
+    prefix = f"v{nnuva.CACHE_VERSION}_"
+    
+    for key, raw_ffprobe in cache_data.items():
+        if not key.startswith(prefix):
+            continue 
+            
+        try:
+            parts = key[len(prefix):].split('_')
+            mtime = parts.pop()
+            size_bytes = int(parts.pop())
+            file_path = Path('_'.join(parts))
+        except Exception:
+            continue
+
+        parsed_data = nnuva.parse_ffprobe_data(
+            data=raw_ffprobe, 
+            filepath=file_path, 
+            size_bytes=size_bytes, 
+            dir_name=str(file_path.parent), 
+            nqi_audio=False
+        )
+        
+        if parsed_data.get('error') or parsed_data.get('skip'):
+            continue
+            
+        total_files += 1
+        total_bytes += size_bytes
+        
+        res = parsed_data.get('RES', 'Unknown')
+        res_counts[res] += 1
+        res_size_bytes[res] += size_bytes
+        
+        nqi_val = str(parsed_data.get('NQI', 'Unknown'))
+        nqi_counts[nqi_val] += 1
+        nqi_size_bytes[nqi_val] += size_bytes
+        
+        all_files.append(parsed_data)
+
+    optimal_count = nqi_counts.get('4', 0) + nqi_counts.get('5', 0)
+    transcode_count = nqi_counts.get('6', 0) + nqi_counts.get('7', 0)
+    upgrade_count = nqi_counts.get('1', 0) + nqi_counts.get('2', 0)
+    
+    total_gb = int(total_bytes / (1024**3))
+
+    current_snapshot = {
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "total_files": total_files,
+        "total_gb": total_gb,
+        "optimal": optimal_count,
+        "transcode": transcode_count,
+        "upgrade": upgrade_count,
+        "nqi": {
+            "counts": dict(nqi_counts),
+            "sizes_gb": {k: round(v / (1024**3), 2) for k, v in nqi_size_bytes.items()}
+        }
+    }
+    history_log = update_history(current_snapshot)
+    
+    if len(history_log) == 1:
+        fake_entry = copy.deepcopy(history_log[0])
+        curr_date = datetime.strptime(fake_entry['date'], '%Y-%m-%d')
+        fake_entry['date'] = (curr_date - timedelta(days=1)).strftime('%Y-%m-%d')
+        history_log.insert(0, fake_entry)
+    
+    try:
+        hist_stat = history_file.stat()
+        hist_size_kb = round(hist_stat.st_size / 1024, 2)
+        hist_mtime = datetime.fromtimestamp(hist_stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        hist_entries = len(history_log)
+    except Exception:
+        hist_size_kb = 0
+        hist_mtime = "Unknown"
+        hist_entries = 0
+
+    minified_files = []
+    for f in all_files:
+        raw_audio = f.get('AUDIO', 'Unknown')
+        base_audio = raw_audio.split(' ')[0] if raw_audio != 'N/A' else 'Unknown'
+        minified_files.append({
+            'file': f.get('file', 'Unknown'),
+            'dir': f.get('dir', 'Unknown'),
+            'RES': f.get('RES', 'Unknown'),
+            'NQI': str(f.get('NQI', 'Unknown')),
+            'VIDEO': f.get('VIDEO', 'Unknown'),
+            'AUDIO': f.get('AUDIO', 'Unknown'),
+            'AUDIO_BASE': base_audio,
+            'HDR': f.get('HDR', 'Unknown'),
+            'size_bytes': f.get('size_bytes', 0),
+            'SIZE': f.get('SIZE', '0B'),
+            'DUR': f.get('DUR', 'N/A'),
+            'BITRATE': f.get('BITRATE', 'N/A'),
+            'FPS': f.get('FPS', 'N/A'),
+            'DEPTH': f.get('DEPTH', 'N/A'),
+            'LANG': f.get('LANG', 'N/A'),
+            'SUBS': f.get('SUBS', 'N/A')
+        })
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NNUVA Library Dashboard v{VERSION}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {{ background-color: #0f172a; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px; }}
+        .container {{ max-width: 1400px; margin: 0 auto; }}
+        .header-section {{ display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #334155; padding-bottom: 10px; margin-bottom: 30px; }}
+        h1 {{ color: #38bdf8; margin: 0; font-size: 2.5rem; display: flex; align-items: center; gap: 15px; }}
+        
+        /* Master Reset Button */
+        .master-reset-btn {{
+            background: rgba(56, 189, 248, 0.1); border: 1px solid #38bdf8; color: #38bdf8;
+            font-size: 0.9rem; padding: 6px 14px; border-radius: 6px; cursor: pointer;
+            transition: all 0.2s ease; display: none; font-weight: bold; text-decoration: none;
+        }}
+        .master-reset-btn:hover {{ background: #38bdf8; color: #0f172a; }}
+
+        .version-badge {{ color: #94a3b8; font-size: 1rem; font-weight: bold; }}
+        h2 {{ color: #e2e8f0; margin-top: 50px; font-weight: 500; }}
+        
+        .kpi-grid {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-bottom: 40px; transition: opacity 0.2s; }}
+        @media (max-width: 1024px) {{ .kpi-grid {{ grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }} }}
+        
+        .kpi-card {{ background-color: #1e293b; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); border-top: 4px solid #334155; transition: transform 0.2s; }}
+        .kpi-card.blue {{ border-top-color: #38bdf8; }}
+        .kpi-card.green {{ border-top-color: #34d399; }}
+        .kpi-card.magenta {{ border-top-color: #d946ef; }}
+        .kpi-card.orange {{ border-top-color: #f97316; }}
+        
+        .kpi-value {{ font-size: 1.8rem; font-weight: bold; margin-top: 10px; white-space: nowrap; }}
+        .kpi-label {{ color: #94a3b8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+        
+        .trend-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-bottom: 15px; }}
+        @media (max-width: 1200px) {{ .trend-grid {{ grid-template-columns: 1fr; }} }}
+        .trend-container {{ background-color: #1e293b; padding: 20px; border-radius: 8px; height: 350px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); cursor: crosshair; }}
+        
+        .status-wrapper {{ margin-bottom: 50px; position: relative; }}
+        .status-bar {{ display: grid; grid-template-columns: repeat(4, 1fr); background-color: #1e293b; border-radius: 8px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); position: relative; z-index: 2; }}
+        .status-segment {{ padding: 15px 25px; border-right: 1px solid #334155; display: flex; flex-direction: column; justify-content: center; }}
+        .status-segment:last-child {{ border-right: none; }}
+        .status-label {{ font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; font-weight: bold; }}
+        .status-value {{ font-size: 1.25rem; font-weight: bold; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+        .status-default {{ grid-column: 1 / -1; text-align: center; padding: 20px; color: #94a3b8; font-size: 0.95rem; }}
+        
+        .pinned-panel {{ background-color: #0f172a; border: 1px solid #334155; border-top: none; border-radius: 0 0 8px 8px; padding: 20px; padding-top: 30px; margin-top: -10px; box-shadow: inset 0 4px 6px -4px rgba(0, 0, 0, 0.3); position: relative; z-index: 1; display: none; }}
+        
+        .filter-bar {{ display: flex; gap: 10px; align-items: center; margin-bottom: 15px; min-height: 36px; flex-wrap: wrap; background: #1e293b; padding: 10px 20px; border-radius: 8px; border: 1px solid #334155; }}
+        .filter-label {{ color: #94a3b8; font-size: 0.9rem; font-weight: bold; margin-right: 5px; }}
+        .filter-pill {{ background: #38bdf8; color: #0f172a; padding: 4px 12px; border-radius: 16px; font-size: 0.85rem; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s; }}
+        .filter-pill:hover {{ background: #0284c7; color: white; }}
+        .filter-clear {{ color: #f87171; font-size: 0.85rem; cursor: pointer; text-decoration: none; padding: 4px 8px; border-radius: 4px; border: 1px solid #f87171; transition: all 0.2s; margin-left: auto; font-weight: bold; }}
+        .filter-clear:hover {{ background: #f87171; color: #0f172a; }}
+        
+        .chart-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-bottom: 50px; }}
+        @media (max-width: 1200px) {{ .chart-grid {{ grid-template-columns: repeat(2, 1fr); }} }}
+        .chart-container {{ background-color: #1e293b; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); position: relative; height: 300px; cursor: pointer; transition: transform 0.1s; }}
+        .chart-container:hover {{ transform: translateY(-2px); box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.15); }}
+        
+        table {{ width: 100%; border-collapse: collapse; background-color: #1e293b; border-radius: 8px; overflow: hidden; margin-bottom: 40px; font-size: 0.95rem; }}
+        th, td {{ padding: 12px 15px; text-align: left; border-bottom: 1px solid #334155; }}
+        th {{ background-color: #0f172a; color: #38bdf8; font-weight: 600; }}
+        tr.clickable-row {{ cursor: pointer; transition: background-color 0.15s; }}
+        tr.clickable-row:hover td {{ background-color: #334155; }}
+        tr:last-child td {{ border-bottom: none; }}
+        .text-right {{ text-align: right; }}
+        
+        .badge {{ padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85rem; color: #0f172a; }}
+        
+        /* Modal UI Classes */
+        .modal-overlay {{ position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }}
+        .modal-content {{ background: #1e293b; border: 1px solid #334155; border-radius: 8px; width: 90%; max-width: 800px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); overflow: hidden; animation: slideIn 0.2s ease-out forwards; }}
+        @keyframes slideIn {{ from {{ transform: translateY(-20px); opacity: 0; }} to {{ transform: translateY(0); opacity: 1; }} }}
+        .modal-header {{ padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; background: #0f172a; }}
+        .modal-close {{ background: transparent; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; transition: color 0.2s; }}
+        .modal-close:hover {{ color: #f87171; }}
+        .modal-body {{ padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }}
+        .modal-section {{ background: #0f172a; padding: 15px; border-radius: 6px; border: 1px solid #334155; }}
+        .modal-section h4 {{ margin-top: 0; margin-bottom: 15px; color: #94a3b8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #334155; padding-bottom: 5px; }}
+        .modal-kv {{ display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.95rem; }}
+        .modal-k {{ color: #64748b; }}
+        .modal-v {{ color: #f8fafc; font-weight: 500; text-align: right; word-break: break-word; margin-left: 15px; }}
+
+        .action-section {{ background-color: #1e293b; padding: 25px; border-radius: 8px; margin-bottom: 30px; border-left: 4px solid #38bdf8; }}
+        .action-section h3 {{ color: #f8fafc; margin-top: 0; margin-bottom: 15px; }}
+        pre {{ background-color: #0f172a; padding: 15px; border-radius: 6px; overflow-x: auto; color: #34d399; border: 1px solid #334155; margin-bottom: 0; }}
+        code {{ font-family: 'Courier New', Courier, monospace; font-size: 0.95rem; }}
+        
+        .db-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
+        @media (max-width: 768px) {{ .db-grid {{ grid-template-columns: 1fr; }} }}
+        .db-panel {{ background-color: #0f172a; padding: 15px; border-radius: 6px; border: 1px solid #334155; }}
+        .db-panel p {{ margin: 5px 0; color: #94a3b8; font-size: 0.9rem; }}
+        .db-panel strong {{ color: #e2e8f0; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-section">
+            <h1>⬢ NNUVA Library Dashboard <a href="#" id="masterResetBtn" class="master-reset-btn">Reset All Charts</a></h1>
+            <div class="version-badge">v{VERSION}</div>
+        </div>
+        
+        <div class="kpi-grid">
+            <div class="kpi-card blue">
+                <div class="kpi-label">Total Files</div>
+                <div class="kpi-value" id="kpi-files">Loading...</div>
+            </div>
+            <div class="kpi-card blue">
+                <div class="kpi-label">Total Storage</div>
+                <div class="kpi-value" id="kpi-storage">Loading...</div>
+            </div>
+            <div class="kpi-card green">
+                <div class="kpi-label">Optimal Encodes (NQI 4-5)</div>
+                <div class="kpi-value" id="kpi-optimal">Loading...</div>
+            </div>
+            <div class="kpi-card magenta">
+                <div class="kpi-label">Transcode Targets (NQI 6-7)</div>
+                <div class="kpi-value" id="kpi-transcode">Loading...</div>
+            </div>
+            <div class="kpi-card orange">
+                <div class="kpi-label">Upgrade Targets (NQI 1-2)</div>
+                <div class="kpi-value" id="kpi-upgrade">Loading...</div>
+            </div>
+        </div>
+
+        <div class="trend-grid">
+            <div class="trend-container" title="Click a data point to pin details"><canvas id="trendChartAbs"></canvas></div>
+            <div class="trend-container" title="Click a data point to pin details"><canvas id="trendChartRel"></canvas></div>
+            <div class="trend-container" title="Click a data point to pin details"><canvas id="trendChartTargets"></canvas></div>
+        </div>
+        
+        <div class="status-wrapper">
+            <div id="statusBar" class="status-bar">
+                <div class="status-default">Hover over a timeline chart to inspect specific data points. Click to pin details.</div>
+            </div>
+            <div id="pinnedPanel" class="pinned-panel"></div>
+        </div>
+
+        <div id="filterBar" class="filter-bar" style="display: none;">
+            <div class="filter-label">Active Database Filters:</div>
+            <div id="filterPills" style="display: flex; gap: 8px;"></div>
+            <a href="#" id="clearFiltersBtn" class="filter-clear">Clear Database Filters</a>
+        </div>
+
+        <div class="chart-grid">
+            <div class="chart-container" title="Click to filter by Resolution"><canvas id="resChart"></canvas></div>
+            <div class="chart-container" title="Click to filter by NQI Score"><canvas id="nqiChart"></canvas></div>
+            <div class="chart-container" title="Click to filter by Resolution"><canvas id="resSizeChart"></canvas></div>
+            <div class="chart-container" title="Click to filter by Video Codec"><canvas id="codecChart"></canvas></div>
+            <div class="chart-container" title="Click to filter by Audio Codec"><canvas id="audioChart"></canvas></div>
+            <div class="chart-container" title="Click to filter by Color Volume"><canvas id="hdrChart"></canvas></div>
+        </div>
+
+        <h2>🚨 Action Required: Top Transcode Candidates (Overkill Bitrates)</h2>
+        <table>
+            <thead><tr><th>Filename</th><th>Resolution</th><th>Video</th><th>HDR/SDR</th><th>Audio</th><th>NQI</th><th class="text-right">Size</th></tr></thead>
+            <tbody id="table-transcode"></tbody>
+        </table>
+
+        <h2>⚠️ Action Required: Top Upgrade Candidates (Low Quality)</h2>
+        <table>
+            <thead><tr><th>Filename</th><th>Resolution</th><th>Video</th><th>HDR/SDR</th><th>Audio</th><th>NQI</th><th class="text-right">Size</th></tr></thead>
+            <tbody id="table-upgrade"></tbody>
+        </table>
+
+        <h2>💾 Top 10 Largest Files Overall</h2>
+        <table>
+            <thead><tr><th>Filename</th><th>Resolution</th><th>Video</th><th>HDR/SDR</th><th>Audio</th><th>NQI</th><th class="text-right">Size</th></tr></thead>
+            <tbody id="table-largest"></tbody>
+        </table>
+
+        <h2 style="color: #38bdf8; margin-top: 50px;">🗄️ System & Database Health</h2>
+        <div class="action-section" style="border-left-color: #64748b;">
+            <div class="db-grid">
+                <div class="db-panel">
+                    <h4 style="margin-top: 0; color: #38bdf8;">Main Cache (ffprobe_cache.json)</h4>
+                    <p><strong>Path:</strong> ~/.nnuva/ffprobe_cache.json</p>
+                    <p><strong>Parser Version:</strong> v{nnuva.CACHE_VERSION}</p>
+                    <p><strong>Size:</strong> {cache_size_mb} MB</p>
+                    <p><strong>Last Scan:</strong> {cache_mtime}</p>
+                </div>
+                <div class="db-panel">
+                    <h4 style="margin-top: 0; color: #38bdf8;">History Ledger (history.json)</h4>
+                    <p><strong>Path:</strong> ~/.nnuva/history.json</p>
+                    <p><strong>Entries:</strong> {hist_entries} Days</p>
+                    <p><strong>Size:</strong> {hist_size_kb} KB</p>
+                    <p><strong>Last Updated:</strong> {hist_mtime}</p>
+                </div>
+            </div>
+            <h4 style="color: #f8fafc; margin-top: 20px; margin-bottom: 10px;">Automating the Pipeline</h4>
+            <p style="color: #94a3b8; font-size: 0.9rem; margin-top: 0; margin-bottom: 15px;">Add this to your crontab (<code>crontab -e</code>) to update the dashboard automatically every night at 3:00 AM:</p>
+            <pre><code>0 3 * * * nnuva /mnt/shin5/video/ && nnuva-report</code></pre>
+        </div>
+    </div>
+
+    <div id="fileModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalFileName" style="margin: 0; color: #38bdf8; word-break: break-all; padding-right: 20px;">Filename</h3>
+                <button onclick="closeFileModal()" class="modal-close">✕</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.maintainAspectRatio = false;
+        
+        const palette = ['#38bdf8', '#818cf8', '#2dd4bf', '#f472b6', '#64748b'];
+        
+        const historyLog = {json.dumps(history_log)};
+        let rawFiles = {json.dumps(minified_files)};
+        
+        // Tag files with unique IDs to fetch them on modal click
+        rawFiles.forEach((f, i) => f.id = i);
+        
+        let activeFilters = {{
+            RES: null,
+            NQI: null,
+            VIDEO: null,
+            AUDIO_BASE: null,
+            HDR: null
+        }};
+        
+        let bResChart, bNqiChart, bResSizeChart, bCodecChart, bAudioChart, bHdrChart;
+
+        const getNqiColor = (scoreStr) => {{
+            const s = scoreStr.replace('Score ', '');
+            if(s === '7') return '#f8fafc'; 
+            if(s === '6') return '#d946ef'; 
+            if(s === '5') return '#22d3ee'; 
+            if(s === '4') return '#34d399'; 
+            if(s === '3') return '#fbbf24'; 
+            if(s === '2') return '#fb923c'; 
+            if(s === '1') return '#f87171'; 
+            return '#64748b';
+        }};
+
+        const getNqiTextColor = (scoreStr) => {{
+            const s = scoreStr.replace('Score ', '');
+            if (['1', '6'].includes(s)) return 'white';
+            return '#0f172a';
+        }};
+
+        const formatGb = (bytes) => {{
+            const gb = bytes / (1024**3);
+            if (gb >= 1000) return (gb / 1024).toFixed(2) + " TB";
+            return Math.floor(gb).toLocaleString() + " GB";
+        }};
+
+        const formatTbRaw = (bytes) => (bytes / (1024**4)).toFixed(2);
+
+        // --- GLOBAL CLIPBOARD COPY ---
+        window.copyCmd = function() {{
+            const codeEl = document.getElementById('transcodeCmd');
+            if (codeEl) {{
+                navigator.clipboard.writeText(codeEl.innerText).then(() => {{
+                    const btn = document.getElementById('copyBtn');
+                    btn.innerText = 'Copied!';
+                    btn.style.background = '#34d399';
+                    btn.style.color = '#0f172a';
+                    setTimeout(() => {{
+                        btn.innerText = 'Copy Bash';
+                        btn.style.background = '#334155';
+                        btn.style.color = '#f8fafc';
+                    }}, 2000);
+                }});
+            }}
+        }};
+
+        // --- DEEP DIVE MODAL LOGIC ---
+        const closeFileModal = () => {{
+            document.getElementById('fileModal').style.display = 'none';
+        }};
+
+        window.onclick = function(event) {{
+            const modal = document.getElementById('fileModal');
+            if (event.target == modal) {{
+                closeFileModal();
+            }}
+        }};
+
+        const openFileModal = (id) => {{
+            const f = rawFiles[id];
+            document.getElementById('modalFileName').innerText = f.file;
+
+            let action = "";
+            let actionColor = "#94a3b8";
+            if (['6','7'].includes(f.NQI)) {{ action = "High Priority Transcode (Overkill Bitrate)"; actionColor = "#d946ef"; }}
+            else if (['1','2'].includes(f.NQI)) {{ action = "High Priority Upgrade (Low Quality)"; actionColor = "#f87171"; }}
+            else if (['4','5'].includes(f.NQI)) {{ action = "Optimal Quality - Retain file."; actionColor = "#34d399"; }}
+            else action = "Acceptable Footprint - Retain file.";
+
+            let bashBlock = "";
+            if (['6', '7'].includes(f.NQI)) {{
+                const safeDir = f.dir === 'CURRENT DIRECTORY' ? '.' : f.dir;
+                const fullPath = `${{safeDir}}/${{f.file}}`;
+                const outPath = fullPath.replace(/\.[^/.]+$/, "") + "_optimal.mkv";
+                const cmd = `HandBrakeCLI -i "${{fullPath}}" -o "${{outPath}}" --encoder nvenc_h265 --encoder-preset slower --quality 22 --all-audio --aencoder ffac3 --ab 640 --mixdown 5point1 --all-subtitles`;
+                
+                bashBlock = `
+                    <div style="grid-column: 1 / -1; margin-top: 10px; background: #020617; padding: 15px; border-radius: 6px; border: 1px solid #334155;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <span style="color: #d946ef; font-size: 0.85rem; font-weight: bold; text-transform: uppercase;">🛠️ Transcode Remediation Command</span>
+                            <button id="copyBtn" onclick="copyCmd()" style="background: #334155; border: 1px solid #475569; color: #f8fafc; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: all 0.2s;">Copy Bash</button>
+                        </div>
+                        <code id="transcodeCmd" style="color: #34d399; font-size: 0.85rem; word-break: break-all; font-family: monospace; display: block; padding: 10px; background: #0f172a; border-radius: 4px;">${{cmd}}</code>
+                    </div>
+                `;
+            }}
+
+            document.getElementById('modalBody').innerHTML = `
+                <div class="modal-section" style="grid-column: 1 / -1;">
+                    <h4>File Location & Status</h4>
+                    <div class="modal-kv"><span class="modal-k">Directory:</span><span class="modal-v" style="color: #38bdf8;">${{f.dir}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Health Score:</span><span class="modal-v"><span class="badge" style="background-color: ${{getNqiColor(f.NQI)}}; color: ${{getNqiTextColor(f.NQI)}};">NQI ${{f.NQI}}</span></span></div>
+                    <div class="modal-kv"><span class="modal-k">Recommendation:</span><span class="modal-v" style="color: ${{actionColor}};">${{action}}</span></div>
+                </div>
+                <div class="modal-section">
+                    <h4>Video Properties</h4>
+                    <div class="modal-kv"><span class="modal-k">Resolution:</span><span class="modal-v">${{f.RES}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Codec:</span><span class="modal-v">${{f.VIDEO}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Bitrate:</span><span class="modal-v">${{f.BITRATE}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Framerate:</span><span class="modal-v">${{f.FPS}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Color / HDR:</span><span class="modal-v">${{f.HDR}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Bit Depth:</span><span class="modal-v">${{f.DEPTH}}</span></div>
+                </div>
+                <div class="modal-section">
+                    <h4>Audio & Metadata</h4>
+                    <div class="modal-kv"><span class="modal-k">File Size:</span><span class="modal-v">${{f.SIZE}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Duration:</span><span class="modal-v">${{f.DUR}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Audio Codec:</span><span class="modal-v">${{f.AUDIO}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Languages:</span><span class="modal-v">${{f.LANG}}</span></div>
+                    <div class="modal-kv"><span class="modal-k">Subtitles:</span><span class="modal-v">${{f.SUBS || 'None'}}</span></div>
+                </div>
+                ${{bashBlock}}
+            `;
+            
+            document.getElementById('fileModal').style.display = 'flex';
+        }};
+
+
+        // --- CROSSFILTER PIPELINE ---
+        const runFilterPipeline = () => {{
+            let currentData = rawFiles.filter(f => {{
+                if (activeFilters.RES && f.RES !== activeFilters.RES) return false;
+                if (activeFilters.NQI && f.NQI !== activeFilters.NQI) return false;
+                if (activeFilters.VIDEO && f.VIDEO !== activeFilters.VIDEO) return false;
+                if (activeFilters.AUDIO_BASE && f.AUDIO_BASE !== activeFilters.AUDIO_BASE) return false;
+                if (activeFilters.HDR && f.HDR !== activeFilters.HDR) return false;
+                return true;
+            }});
+
+            renderFilterBar();
+
+            let tFiles = currentData.length;
+            let tBytes = currentData.reduce((sum, f) => sum + f.size_bytes, 0);
+            let cOpt = currentData.filter(f => ['4','5'].includes(f.NQI)).length;
+            let cTrn = currentData.filter(f => ['6','7'].includes(f.NQI)).length;
+            let cUpg = currentData.filter(f => ['1','2'].includes(f.NQI)).length;
+
+            document.getElementById('kpi-files').innerText = tFiles.toLocaleString();
+            document.getElementById('kpi-storage').innerText = formatGb(tBytes);
+            document.getElementById('kpi-optimal').innerText = cOpt.toLocaleString();
+            document.getElementById('kpi-transcode').innerText = cTrn.toLocaleString();
+            document.getElementById('kpi-upgrade').innerText = cUpg.toLocaleString();
+
+            updateBottomCharts(currentData);
+            updateTables(currentData);
+        }};
+
+        const renderFilterBar = () => {{
+            const bar = document.getElementById('filterBar');
+            const pills = document.getElementById('filterPills');
+            const masterReset = document.getElementById('masterResetBtn');
+            pills.innerHTML = '';
+            let hasFilters = false;
+
+            Object.keys(activeFilters).forEach(key => {{
+                if (activeFilters[key]) {{
+                    hasFilters = true;
+                    let displayKey = key === 'AUDIO_BASE' ? 'AUDIO' : key;
+                    pills.innerHTML += `
+                        <div class="filter-pill" onclick="toggleFilter('${{key}}', '${{activeFilters[key]}}')">
+                            ${{displayKey}}: ${{activeFilters[key]}} ✕
+                        </div>
+                    `;
+                }}
+            }});
+
+            bar.style.display = hasFilters ? 'flex' : 'none';
+            masterReset.style.display = hasFilters ? 'block' : 'none';
+        }};
+
+        const clearAllFilters = (e) => {{
+            if(e) e.preventDefault();
+            Object.keys(activeFilters).forEach(k => activeFilters[k] = null);
+            runFilterPipeline();
+        }};
+
+        document.getElementById('clearFiltersBtn').addEventListener('click', clearAllFilters);
+        document.getElementById('masterResetBtn').addEventListener('click', clearAllFilters);
+
+        const toggleFilter = (key, val) => {{
+            if (val === 'Others') return; 
+            if (activeFilters[key] === val) activeFilters[key] = null; 
+            else activeFilters[key] = val; 
+            runFilterPipeline();
+        }};
+
+        const buildClickHandler = (key) => (e, elements, chart) => {{
+            if (!elements || elements.length === 0) return;
+            const index = elements[0].index;
+            let label = chart.data.labels[index];
+            if (key === 'NQI') label = label.replace('Score ', '');
+            toggleFilter(key, label);
+        }};
+
+        const aggData = (data, key, fixedOrder = null, maxCats = 5) => {{
+            let counts = {{}};
+            let sizes = {{}};
+            data.forEach(d => {{
+                let val = d[key];
+                if (key === 'NQI') val = 'Score ' + val;
+                counts[val] = (counts[val] || 0) + 1;
+                sizes[val] = (sizes[val] || 0) + d.size_bytes;
+            }});
+
+            let labels = [], dataCounts = [], dataSizes = [];
+
+            if (fixedOrder) {{
+                labels = fixedOrder.filter(l => counts[l] !== undefined);
+                Object.keys(counts).forEach(k => {{ if (!labels.includes(k)) labels.push(k); }});
+                dataCounts = labels.map(l => counts[l]);
+                dataSizes = labels.map(l => (sizes[l] / (1024**3)).toFixed(2));
+            }} else {{
+                let sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                if (sorted.length <= maxCats) {{
+                    labels = sorted.map(s => s[0]);
+                    dataCounts = sorted.map(s => s[1]);
+                }} else {{
+                    let top = sorted.slice(0, maxCats - 1);
+                    labels = top.map(s => s[0]);
+                    dataCounts = top.map(s => s[1]);
+                    let othersCount = sorted.slice(maxCats - 1).reduce((sum, curr) => sum + curr[1], 0);
+                    labels.push('Others');
+                    dataCounts.push(othersCount);
+                }}
+            }}
+            return {{ labels, dataCounts, dataSizes }};
+        }};
+
+        const initBottomCharts = () => {{
+            const legendOff = {{ display: false }};
+            const legendOn = {{ display: true, position: 'top', labels: {{ boxWidth: 12, padding: 15, font: {{ size: 11 }} }} }};
+
+            bResChart = new Chart(document.getElementById('resChart'), {{
+                type: 'bar', data: {{ labels: [], datasets: [{{ data: [], backgroundColor: palette, borderRadius: 4 }}] }},
+                options: {{ plugins: {{ title: {{ display: true, text: 'Library Resolution' }}, legend: legendOff }}, scales: {{ y: {{ beginAtZero: true }} }}, onClick: buildClickHandler('RES') }}
+            }});
+
+            bNqiChart = new Chart(document.getElementById('nqiChart'), {{
+                type: 'bar', data: {{ labels: [], datasets: [{{ data: [], backgroundColor: [], borderRadius: 4 }}] }},
+                options: {{ plugins: {{ title: {{ display: true, text: 'NQI Health Distribution' }}, legend: legendOff }}, scales: {{ y: {{ beginAtZero: true }} }}, onClick: buildClickHandler('NQI') }}
+            }});
+
+            bResSizeChart = new Chart(document.getElementById('resSizeChart'), {{
+                type: 'doughnut', data: {{ labels: [], datasets: [{{ data: [], backgroundColor: palette, borderWidth: 0 }}] }},
+                options: {{ plugins: {{ title: {{ display: true, text: 'Storage Footprint by Res (GB)' }}, legend: legendOn }}, cutout: '65%', onClick: buildClickHandler('RES') }}
+            }});
+
+            bCodecChart = new Chart(document.getElementById('codecChart'), {{
+                type: 'doughnut', data: {{ labels: [], datasets: [{{ data: [], backgroundColor: palette, borderWidth: 0 }}] }},
+                options: {{ plugins: {{ title: {{ display: true, text: 'Video Codecs' }}, legend: legendOn }}, cutout: '65%', onClick: buildClickHandler('VIDEO') }}
+            }});
+
+            bAudioChart = new Chart(document.getElementById('audioChart'), {{
+                type: 'doughnut', data: {{ labels: [], datasets: [{{ data: [], backgroundColor: palette, borderWidth: 0 }}] }},
+                options: {{ plugins: {{ title: {{ display: true, text: 'Audio Codecs' }}, legend: legendOn }}, cutout: '65%', onClick: buildClickHandler('AUDIO_BASE') }}
+            }});
+
+            bHdrChart = new Chart(document.getElementById('hdrChart'), {{
+                type: 'pie', data: {{ labels: [], datasets: [{{ data: [], backgroundColor: palette, borderWidth: 0 }}] }},
+                options: {{ plugins: {{ title: {{ display: true, text: 'Color Volume (HDR vs SDR)' }}, legend: legendOn }}, onClick: buildClickHandler('HDR') }}
+            }});
+        }};
+
+        const updateBottomCharts = (data) => {{
+            const resAgg = aggData(data, 'RES', ['4K', '1080p', '720p', '480p']);
+            bResChart.data.labels = resAgg.labels;
+            bResChart.data.datasets[0].data = resAgg.dataCounts;
+            bResChart.update();
+
+            bResSizeChart.data.labels = resAgg.labels;
+            bResSizeChart.data.datasets[0].data = resAgg.dataSizes;
+            bResSizeChart.update();
+
+            const nqiAgg = aggData(data, 'NQI', ['Score 7', 'Score 6', 'Score 5', 'Score 4', 'Score 3', 'Score 2', 'Score 1']);
+            bNqiChart.data.labels = nqiAgg.labels;
+            bNqiChart.data.datasets[0].data = nqiAgg.dataCounts;
+            bNqiChart.data.datasets[0].backgroundColor = nqiAgg.labels.map(l => getNqiColor(l));
+            bNqiChart.update();
+
+            const vidAgg = aggData(data, 'VIDEO', null, 5);
+            bCodecChart.data.labels = vidAgg.labels;
+            bCodecChart.data.datasets[0].data = vidAgg.dataCounts;
+            bCodecChart.update();
+
+            const audAgg = aggData(data, 'AUDIO_BASE', null, 5);
+            bAudioChart.data.labels = audAgg.labels;
+            bAudioChart.data.datasets[0].data = audAgg.dataCounts;
+            bAudioChart.update();
+
+            const hdrAgg = aggData(data, 'HDR', null, 5);
+            bHdrChart.data.labels = hdrAgg.labels;
+            bHdrChart.data.datasets[0].data = hdrAgg.dataCounts;
+            bHdrChart.update();
+        }};
+
+        const buildRows = (items, emptyMsg) => {{
+            if (!items.length) return `<tr><td colspan='7'>${{emptyMsg}}</td></tr>`;
+            return items.map(f => `<tr class="clickable-row" onclick="openFileModal('${{f.id}}')">
+                <td>${{f.file}}</td><td>${{f.RES}}</td><td>${{f.VIDEO}}</td><td>${{f.HDR}}</td><td>${{f.AUDIO}}</td>
+                <td><span class="badge" style="background-color: ${{getNqiColor(f.NQI)}}; color: ${{getNqiTextColor(f.NQI)}};">${{f.NQI}}</span></td>
+                <td class="text-right">${{f.SIZE}}</td>
+            </tr>`).join('');
+        }};
+
+        const updateTables = (data) => {{
+            const sortedByObj = [...data].sort((a,b) => b.size_bytes - a.size_bytes);
+            
+            const trn = sortedByObj.filter(f => ['6','7'].includes(f.NQI)).slice(0, 10);
+            const upg = sortedByObj.filter(f => ['1','2'].includes(f.NQI)).slice(0, 10);
+            const top = sortedByObj.slice(0, 10);
+
+            document.getElementById('table-transcode').innerHTML = buildRows(trn, "No transcode targets found matching current filters.");
+            document.getElementById('table-upgrade').innerHTML = buildRows(upg, "No upgrade targets found matching current filters.");
+            document.getElementById('table-largest').innerHTML = buildRows(top, "No files found.");
+        }};
+
+        // --- TREND CHARTS (GLOBAL/HISTORY) ---
+        const histDates = historyLog.map(h => h.date);
+        
+        const getHistTb = (entry, score) => {{ const gb = entry.nqi?.sizes_gb?.[score] || 0; return (gb / 1024).toFixed(2); }};
+        const tb7 = historyLog.map(e => getHistTb(e, '7'));
+        const tb6 = historyLog.map(e => getHistTb(e, '6'));
+        const tb5 = historyLog.map(e => getHistTb(e, '5'));
+        const tb4 = historyLog.map(e => getHistTb(e, '4'));
+        const tb3 = historyLog.map(e => getHistTb(e, '3'));
+        const tb2 = historyLog.map(e => getHistTb(e, '2'));
+        const tb1 = historyLog.map(e => getHistTb(e, '1'));
+
+        const calcPct = (entry, score) => {{
+            const gb = entry.nqi?.sizes_gb?.[score] || 0;
+            const total = (entry.nqi?.sizes_gb && Object.values(entry.nqi.sizes_gb).reduce((a,b)=>a+b,0)) || entry.total_gb || 1;
+            return ((gb / total) * 100).toFixed(2);
+        }};
+        const pct7 = historyLog.map(e => calcPct(e, '7'));
+        const pct6 = historyLog.map(e => calcPct(e, '6'));
+        const pct5 = historyLog.map(e => calcPct(e, '5'));
+        const pct4 = historyLog.map(e => calcPct(e, '4'));
+        const pct3 = historyLog.map(e => calcPct(e, '3'));
+        const pct2 = historyLog.map(e => calcPct(e, '2'));
+        const pct1 = historyLog.map(e => calcPct(e, '1'));
+
+        const getHistCount = (entry, score) => entry.nqi?.counts?.[score] || 0;
+        const c7 = historyLog.map(e => getHistCount(e, '7'));
+        const c6 = historyLog.map(e => getHistCount(e, '6'));
+        const c5 = historyLog.map(e => getHistCount(e, '5'));
+        const c4 = historyLog.map(e => getHistCount(e, '4'));
+        const c3 = historyLog.map(e => getHistCount(e, '3'));
+        const c2 = historyLog.map(e => getHistCount(e, '2'));
+        const c1 = historyLog.map(e => getHistCount(e, '1'));
+
+        const stackedDatasets = (d1, d2, d3, d4, d5, d6, d7) => [
+            {{ label: 'NQI 1 (Upgrade)', data: d1, backgroundColor: 'rgba(248, 113, 113, 0.8)', borderColor: '#f87171', fill: true, tension: 0.2 }},
+            {{ label: 'NQI 2', data: d2, backgroundColor: 'rgba(251, 146, 60, 0.8)', borderColor: '#fb923c', fill: true, tension: 0.2 }},
+            {{ label: 'NQI 3', data: d3, backgroundColor: 'rgba(251, 191, 36, 0.8)', borderColor: '#fbbf24', fill: true, tension: 0.2 }},
+            {{ label: 'NQI 4', data: d4, backgroundColor: 'rgba(52, 211, 153, 0.8)', borderColor: '#34d399', fill: true, tension: 0.2 }},
+            {{ label: 'NQI 5 (Optimal)', data: d5, backgroundColor: 'rgba(34, 211, 238, 0.8)', borderColor: '#22d3ee', fill: true, tension: 0.2 }},
+            {{ label: 'NQI 6', data: d6, backgroundColor: 'rgba(217, 70, 239, 0.4)', borderColor: '#d946ef', fill: true, tension: 0.2 }},
+            {{ label: 'NQI 7 (Overkill)', data: d7, backgroundColor: 'rgba(241, 245, 249, 0.9)', borderColor: '#ffffff', fill: true, tension: 0.2 }}
+        ];
+
+        const legendConfig = {{ display: true, position: 'top', labels: {{ boxWidth: 12, padding: 15, font: {{ size: 11 }} }} }};
+
+        let chartAbs, chartRel, chartCounts;
+        let isSyncing = false;
+
+        const handleHover = (chartId) => (e, elements, chart) => {{
+            if (isSyncing) return;
+            const statusBar = document.getElementById('statusBar');
+
+            if (!elements || elements.length === 0) {{
+                isSyncing = true;
+                if(chartAbs) {{ chartAbs.setActiveElements([]); chartAbs.update(); }}
+                if(chartRel) {{ chartRel.setActiveElements([]); chartRel.update(); }}
+                if(chartCounts) {{ chartCounts.setActiveElements([]); chartCounts.update(); }}
+                statusBar.innerHTML = '<div class="status-default">Hover over a timeline chart to inspect specific data points. Click to pin details.</div>';
+                isSyncing = false;
+                return;
+            }}
+
+            const dIndex = elements[0].datasetIndex;
+            const index = elements[0].index;
+            const date = chart.data.labels[index];
+
+            isSyncing = true;
+            const activePoint = [{{datasetIndex: dIndex, index}}];
+
+            if (chartId !== 'abs' && chartAbs) {{ chartAbs.setActiveElements(activePoint); chartAbs.update(); }}
+            if (chartId !== 'rel' && chartRel) {{ chartRel.setActiveElements(activePoint); chartRel.update(); }}
+            if (chartId !== 'cnt' && chartCounts) {{ chartCounts.setActiveElements(activePoint); chartCounts.update(); }}
+
+            const label = chart.data.datasets[dIndex].label;
+            const color = chart.data.datasets[dIndex].borderColor;
+            
+            const tbVal = chartAbs ? chartAbs.data.datasets[dIndex].data[index] : '0.00';
+            const pctVal = chartRel ? chartRel.data.datasets[dIndex].data[index] : '0.00';
+            const cntVal = chartCounts ? chartCounts.data.datasets[dIndex].data[index] : '0';
+
+            statusBar.innerHTML = `
+                <div class="status-segment">
+                    <div class="status-label">Snapshot Date</div>
+                    <div class="status-value">${{date}}</div>
+                </div>
+                <div class="status-segment">
+                    <div class="status-label">Category</div>
+                    <div class="status-value" style="color: ${{color}};">${{label}}</div>
+                </div>
+                <div class="status-segment">
+                    <div class="status-label">File Count</div>
+                    <div class="status-value">${{cntVal}} Files</div>
+                </div>
+                <div class="status-segment">
+                    <div class="status-label">Storage Footprint</div>
+                    <div class="status-value">${{tbVal}} TB <span style="color: #64748b; font-size: 0.95rem;">(${{pctVal}}%)</span></div>
+                </div>
+            `;
+
+            isSyncing = false;
+        }};
+
+        const handleClick = (e, elements, chart) => {{
+            if (!elements || elements.length === 0) return;
+            
+            const dIndex = elements[0].datasetIndex;
+            const index = elements[0].index;
+            const date = chart.data.labels[index];
+            const label = chart.data.datasets[dIndex].label;
+            const color = chart.data.datasets[dIndex].borderColor;
+            
+            const entry = historyLog[index];
+            const score = (dIndex + 1).toString(); 
+
+            const fileCount = entry.nqi?.counts?.[score] || 0;
+            const tbVal = getHistTb(entry, score);
+            const pctVal = calcPct(entry, score);
+            
+            let action = "";
+            if (['6','7'].includes(score)) action = "High Priority Transcode. Use HandBrake NVENC loop.";
+            else if (['1','2'].includes(score)) action = "High Priority Upgrade. Search via Sonarr/Radarr.";
+            else if (['4','5'].includes(score)) action = "Optimal encode. No action required.";
+            else action = "Acceptable footprint. Leave as is.";
+
+            const pinnedPanel = document.getElementById('pinnedPanel');
+            pinnedPanel.style.display = 'block';
+            
+            pinnedPanel.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: ${{color}};"><span style="color: #e2e8f0;">📌 Pinned Snapshot:</span> ${{label}}</h3>
+                    <button onclick="document.getElementById('pinnedPanel').style.display='none'" style="background: transparent; border: 1px solid #475569; color: #94a3b8; padding: 5px 12px; border-radius: 4px; cursor: pointer; transition: all 0.2s;">Close</button>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+                    <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight:bold;">Date</span><br><strong style="color: #f8fafc; font-size: 1.1rem;">${{date}}</strong></div>
+                    <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight:bold;">File Count</span><br><strong style="color: #f8fafc; font-size: 1.1rem;">${{fileCount.toLocaleString()}}</strong></div>
+                    <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight:bold;">Storage Volume</span><br><strong style="color: #f8fafc; font-size: 1.1rem;">${{tbVal}} TB</strong></div>
+                    <div><span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight:bold;">Library Share</span><br><strong style="color: #f8fafc; font-size: 1.1rem;">${{pctVal}}%</strong></div>
+                </div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #334155;">
+                    <span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight:bold;">Actionable Insight</span><br>
+                    <span style="color: #cbd5e1; font-size: 1rem;">${{action}}</span>
+                </div>
+            `;
+        }};
+
+        chartAbs = new Chart(document.getElementById('trendChartAbs'), {{
+            type: 'line',
+            data: {{ labels: histDates, datasets: stackedDatasets(tb1, tb2, tb3, tb4, tb5, tb6, tb7) }},
+            options: {{
+                plugins: {{ title: {{ display: true, text: 'Storage by Quality Tier' }}, tooltip: {{ enabled: false }}, legend: legendConfig }},
+                scales: {{ x: {{ grid: {{ color: '#334155' }} }}, y: {{ stacked: true, grid: {{ color: '#334155' }}, ticks: {{ callback: (v) => v + ' TB' }} }} }},
+                interaction: {{ mode: 'nearest', axis: 'xy', intersect: false }},
+                onHover: handleHover('abs'), onClick: handleClick
+            }}
+        }});
+
+        chartRel = new Chart(document.getElementById('trendChartRel'), {{
+            type: 'line',
+            data: {{ labels: histDates, datasets: stackedDatasets(pct1, pct2, pct3, pct4, pct5, pct6, pct7) }},
+            options: {{
+                plugins: {{ title: {{ display: true, text: 'Library Composition' }}, tooltip: {{ enabled: false }}, legend: legendConfig }},
+                scales: {{ x: {{ grid: {{ color: '#334155' }} }}, y: {{ stacked: true, max: 100, grid: {{ color: '#334155' }}, ticks: {{ callback: (v) => v + '%' }} }} }},
+                interaction: {{ mode: 'nearest', axis: 'xy', intersect: false }},
+                onHover: handleHover('rel'), onClick: handleClick
+            }}
+        }});
+
+        chartCounts = new Chart(document.getElementById('trendChartTargets'), {{
+            type: 'line',
+            data: {{ labels: histDates, datasets: stackedDatasets(c1, c2, c3, c4, c5, c6, c7) }},
+            options: {{
+                plugins: {{ title: {{ display: true, text: 'File Count by Quality Tier' }}, tooltip: {{ enabled: false }}, legend: legendConfig }},
+                scales: {{ x: {{ grid: {{ color: '#334155' }} }}, y: {{ stacked: true, grid: {{ color: '#334155' }}, beginAtZero: true }} }},
+                interaction: {{ mode: 'nearest', axis: 'xy', intersect: false }},
+                onHover: handleHover('cnt'), onClick: handleClick
+            }}
+        }});
+
+        initBottomCharts();
+        runFilterPipeline();
+
+    </script>
+</body>
+</html>
+"""
+
+    output_file = Path.cwd() / 'nnuva_report.html'
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        print(f"\n\033[92m✓ Success! Report generated at:\033[0m {output_file}")
+        print("Double-click the file to open it in your browser.")
+    except Exception as e:
+        print(f"Error saving report: {e}")
+
+if __name__ == '__main__':
+    generate_report()

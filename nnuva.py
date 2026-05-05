@@ -8,6 +8,22 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
+# ==============================================================================
+# CHANGELOG
+# ==============================================================================
+# v2.9.32 (2026-05-05) - UI: Reverted NQI indicators to hexagon glyphs (⬡⬢✪) restoring column alignment and brand consistency.
+# v2.9.31 (2026-05-05) - SEARCH: Replaced difflib fuzzy with Levenshtein sliding-window + 3-char prefix anchor for far better precision.
+# v2.9.30 (2026-05-05) - SEARCH: Added -f/-p short flags and difflib fuzzy fallback for typo tolerance.
+# v2.9.29 (2026-05-05) - SEARCH: Added --find for substring path filtering and --paths for piping absolute paths.
+# v2.9.28 (2026-04-13) - INFO: Added number of entries to -i
+# v2.9.27 (2026-04-13) - CORE: Overhauled NQI engine with FPS scaling, TrueHD payload isolation, and 8-bit HEVC penalties.
+# v2.9.26 (2026-04-11) - UI: Simplified progress indicator to a clean, single ⬢
+# v2.9.25 (2026-04-11) - FIX: Handled KeyboardInterrupt gracefully during file discovery (os.walk)
+# v2.9.24 (2026-04-11) - UI: Implemented the colourful ⬢/⬡ dynamic progress bar
+# v2.9.14 (2026-04-11) - UI: Updated NQI 7 (Overkill) visualizer to BOLD WHITE '✪✪✪'
+# [ PASTE HISTORICAL CHANGELOGS HERE ]
+# ==============================================================================
+
 import sys
 import os
 import json
@@ -28,30 +44,13 @@ from typing import Optional, Dict, Any, Generator
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "2.9.1"
-CACHE_VERSION = 2
-
-# Changelog:
-#   2.9.1 - Convert all Python docstrings (""") to standard block comments (#) for visual consistency.
-#   2.9.0 - Comprehensive documentation overhaul; added human-readable docstrings to all classes and functions.
-#   2.8.3 - Fix TS parsing: select highest-res video stream (ignore 1seg) and check height for anamorphic 1080.
-#   2.8.2 - Restore changelog visibility during the installation pre-flight checklist.
-#   2.8.1 - UI tweak: render directory aggregated sizes in bold white instead of gray.
-#   2.8.0 - Upgrade cache engine with versioning and automatic stale entry garbage collection.
-#   2.7.0 - Implement arbitrary depth directory scanning and true n-tier tree rendering.
-#   2.6.4 - Professionalize installer output and fix logical flow of [y/N] prompt.
-#   2.6.3 - Restore version/path details to --info output; fix smart_install_prompt logic.
-#   2.6.2 - Restore missing is_valid_dir() helper function deleted in 2.6.1 refactor.
-#   2.6.1 - Deep code cleanup: refactored tree generator, extracted ffprobe parsing, DRYed inputs.
-#   2.6.0 - Revamp installation pre-flight to check permissions and version context.
-#   2.5.0 - Introduce Homebase engine with Erlang-style hardware-bound instance IDs.
-#   2.0.0 - MILESTONE: Introduce ~/.nnuva/ local database to cache ffprobe scans.
+VERSION = "2.9.32"
+CACHE_VERSION = 4
 
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
 MAX_THREADS = min(16, (os.cpu_count() or 4) * 2)
 
 class Color:
-    # Container for ANSI escape codes used to style terminal output.
     RESET   = '\033[0m'
     BOLD    = '\033[1m'
     BLACK   = '\033[30m'
@@ -78,8 +77,6 @@ _ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 # ==============================================================================
 
 class HomebaseManager:
-    # Manages the persistent identity, installation metadata, and root configuration 
-    # of this specific NNUVA instance.
     def __init__(self):
         self.dir = Path.home() / '.nnuva'
         self.filepath = self.dir / 'homebase.json'
@@ -87,8 +84,6 @@ class HomebaseManager:
         self.initialize()
 
     def initialize(self):
-        # Creates the Homebase directory and configuration if it doesn't exist.
-        # Generates an Erlang-style unique hardware-bound ID using UUID1.
         if self.filepath.exists():
             try:
                 with open(self.filepath, 'r', encoding='utf-8') as f:
@@ -111,22 +106,21 @@ class HomebaseManager:
         except Exception:
             pass
 
-    def display_info(self, cache_filepath: Path, exe_path: str):
-        # Prints a styled summary of the current NNUVA installation to the terminal.
-        print(f"\n{Color.CYAN}{Color.BOLD}⬢ NNUVA HOMEBASE ⬢{Color.RESET}")
+    def display_info(self, cache_filepath: Path, exe_path: str, cached_files_count: int):
+        print(f"\n{Color.CYAN}{Color.BOLD}⬢ NNUVA SYSTEM INFO ⬢{Color.RESET}")
         print(f"{Color.GRAY}----------------------------------------{Color.RESET}")
         print(f" {Color.BOLD}Version:{Color.RESET}       v{VERSION}")
         print(f" {Color.BOLD}Binary:{Color.RESET}        {exe_path}")
         print(f" {Color.BOLD}Instance ID:{Color.RESET}   {self.data.get('instance_id', 'UNKNOWN')}")
         print(f" {Color.BOLD}Installed:{Color.RESET}     {self.data.get('installed_at', 'UNKNOWN')[:10]}")
-        print(f" {Color.BOLD}Home Path:{Color.RESET}     {self.dir.absolute()}")
+        print(f" {Color.BOLD}Database Path:{Color.RESET} {self.dir.absolute()}")
         cache_size = format_size(cache_filepath.stat().st_size) if cache_filepath.exists() else "0B"
         print(f" {Color.BOLD}Cache Size:{Color.RESET}    {cache_size}")
+        print(f" {Color.BOLD}Cached Files:{Color.RESET}  {cached_files_count}")
         print(f"{Color.GRAY}----------------------------------------{Color.RESET}\n")
-
+        
+    
 class CacheManager:
-    # Handles loading, retrieving, and saving ffprobe metadata to a local JSON file 
-    # to prevent redundant, expensive media scans. Implements version-based garbage collection.
     def __init__(self):
         self.dir = Path.home() / '.nnuva'
         self.filepath = self.dir / 'ffprobe_cache.json'
@@ -136,7 +130,6 @@ class CacheManager:
         self.load()
 
     def load(self):
-        # Loads the cache from disk and drops stale entries from older parsing versions.
         legacy_enc = self.dir / 'ffprobe_cache.enc'
         if legacy_enc.exists():
             try: legacy_enc.unlink()
@@ -146,29 +139,22 @@ class CacheManager:
             try:
                 with open(self.filepath, 'r', encoding='utf-8') as f:
                     raw_data = json.load(f)
-                    
-                # Garbage collect stale cache entries using the cache version prefix
                 prefix = f"v{CACHE_VERSION}_"
                 self.data = {k: v for k, v in raw_data.items() if k.startswith(prefix)}
-                
                 if len(self.data) < len(raw_data):
                     self.is_dirty = True
-                    
             except Exception:
                 self.data = {}
 
     def get(self, key):
-        # Retrieves a cached data dictionary for a specific file key.
         return self.data.get(key)
 
     def set(self, key, val):
-        # Thread-safe method to inject new ffprobe data into the cache in memory.
         with self.lock:
             self.data[key] = val
             self.is_dirty = True
 
     def save(self):
-        # Writes the cached data back to the JSON file if changes occurred.
         if self.is_dirty:
             try:
                 self.dir.mkdir(exist_ok=True)
@@ -185,15 +171,12 @@ global_cache = CacheManager()
 # ==============================================================================
 
 def get_display_width(text: str) -> int:
-    # Calculates the true visual width of a string in the terminal.
-    # Strips invisible ANSI codes and counts East Asian characters (Kanji/Kana) as 2 spaces.
     if not text: return 0
     clean = _ANSI_ESCAPE.sub('', str(text))
     text = unicodedata.normalize('NFC', clean)
     return sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in text if unicodedata.category(c) not in ('Mn', 'Me', 'Cf'))
 
 def align_string(text: str, target_width: int, align: str = 'left') -> str:
-    # Pads a string with spaces to reach a target visual width.
     text_str = str(text)
     pad = max(0, target_width - get_display_width(text_str))
     if align == 'right': return (' ' * pad) + text_str
@@ -201,8 +184,6 @@ def align_string(text: str, target_width: int, align: str = 'left') -> str:
     return text_str + (' ' * pad)
 
 def truncate(string: str, max_width: int) -> str:
-    # Intelligently shortens a string that exceeds a maximum visual width 
-    # by replacing the middle with '...', respecting complex character widths.
     string = unicodedata.normalize('NFC', str(string))
     if get_display_width(string) <= max_width: return string
     keep = (max_width - 3) // 2
@@ -219,7 +200,6 @@ def truncate(string: str, max_width: int) -> str:
     return left + '...' + right
 
 def format_size(size_bytes: int) -> str:
-    # Converts a raw byte count into a human-readable storage string.
     if size_bytes == 0: return '0B'
     if size_bytes >= 100 * 1024**3: return f'{size_bytes / (1024**4):.1f}TB'
     size_name = ('B', 'KB', 'MB', 'GB', 'TB')
@@ -228,7 +208,6 @@ def format_size(size_bytes: int) -> str:
     return f'{round(size_bytes / p, 1):g}{size_name[i]}'
 
 def format_duration(seconds: Optional[str]) -> str:
-    # Converts seconds into an HH:MM:SS or MM:SS formatted string.
     if not seconds: return 'N/A'
     try:
         m, s = divmod(float(seconds), 60)
@@ -237,13 +216,12 @@ def format_duration(seconds: Optional[str]) -> str:
     except Exception: return 'N/A'
 
 def style_text(text: str, col_name: str) -> str:
-    # Applies contextual ANSI color styling to specific data grid values.
     if not text: return text
     s = text.strip()
     if col_name == 'NQI' and s.isdigit():
-        indicators = ['⬡⬡⬡', '⬢⬡⬡', '⬢⬢⬡', '⬢⬢⬢', '✪⬡⬡']
-        colors = [Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.CYAN]
-        idx = min(4, max(0, int(s) - 1))
+        indicators = ['⬡⬡⬡', '⬢⬡⬡', '⬢⬢⬡', '⬢⬢⬢', '✪⬡⬡', '✪✪⬡', '✪✪✪']
+        colors = [Color.RED, Color.ORANGE, Color.YELLOW, Color.GREEN, Color.CYAN, Color.MAGENTA, f"{Color.WHITE}{Color.BOLD}"]
+        idx = min(6, max(0, int(s) - 1))
         return f'{colors[idx]}{indicators[idx]}{Color.RESET}'
     if s == '1080p': return f'{Color.YELLOW}{text}{Color.RESET}'
     if s in ('720p', '480p'): return f'{Color.RED}{text}{Color.RESET}'
@@ -252,7 +230,6 @@ def style_text(text: str, col_name: str) -> str:
     return text
 
 def style_folder_line(path_str: str, file_width: int, prefix: str) -> str:
-    # Formats a directory line in the CLI output, styling the branch symbols and the text.
     folder_name = './' if path_str == 'CURRENT DIRECTORY' else f'{Path(path_str).name}/'
     full_string = f'{prefix}{folder_name}'
     if get_display_width(full_string) > file_width:
@@ -265,7 +242,6 @@ def style_folder_line(path_str: str, file_width: int, prefix: str) -> str:
     return align_string(styled, file_width)
 
 def render_columns(data_dict: Dict, cw: Dict, cols: list, div: str) -> str:
-    # Constructs the right-hand data grid side of the CLI output for a given file or folder.
     row = ""
     for c in cols:
         if 'is_dir_size' in data_dict and c == 'SIZE':
@@ -280,7 +256,6 @@ def render_columns(data_dict: Dict, cw: Dict, cols: list, div: str) -> str:
     return row
 
 def prompt_yes_no(prompt: str) -> bool:
-    # Helper to prompt the user for explicit [y/N] consent, catching keyboard interrupts cleanly.
     try:
         resp = input(prompt).strip().lower()
         if resp not in ['y', 'yes']:
@@ -291,55 +266,101 @@ def prompt_yes_no(prompt: str) -> bool:
         print(f"\n{Color.RED}Aborted.{Color.RESET}")
         return False
 
+def _levenshtein(a: str, b: str) -> int:
+    if len(a) < len(b): a, b = b, a
+    if not b: return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a):
+        curr = [i + 1]
+        for j, cb in enumerate(b):
+            curr.append(min(prev[j + 1] + 1, curr[j] + 1, prev[j] + (ca != cb)))
+        prev = curr
+    return prev[-1]
+
+def _fuzzy_token_match(token: str, words: list, max_dist: int = 1) -> bool:
+    """Return True if any sliding window of any candidate word is within max_dist edits of token.
+    Tokens under 4 chars are skipped. Candidate words must contain token's first 3 chars (prefix anchor)."""
+    if len(token) < 4: return False
+    n = len(token)
+    prefix = token[:3]
+    candidates = [w for w in words if prefix in w]
+    if not candidates: return False
+    for w in candidates:
+        for wl in (n - 1, n, n + 1):
+            if wl < 1 or len(w) < wl: continue
+            for i in range(len(w) - wl + 1):
+                if _levenshtein(token, w[i:i + wl]) <= max_dist:
+                    return True
+    return False
+
 # ==============================================================================
 # QUALITY INDEX
 # ==============================================================================
 
 class NQI:
-    # Nic's Quality Index engine. Evaluates the visual and auditory fidelity of a media file 
-    # based on resolution, modern codec usage, HDR color volume, and lossless audio tracks.
     DB = {
-        'base_scores': {'4K': 2.5, '1080p': 1.5, '720p': 0.5, '480p': 0.0, 'N/A': 0.0},
+        'base_scores': {'4K': 3.0, '1080p': 2.0, '720p': 1.0, '480p': 0.0, 'N/A': 0.0},
         'bitrate_targets_kbps': {
-            '4K':    {'efficient': 8000,  'standard': 25000},
-            '1080p': {'efficient': 3000,  'standard': 8000},
-            '720p':  {'efficient': 1500,  'standard': 3000},
-            '480p':  {'efficient': 800,   'standard': 1500},
+            '4K':    {'efficient': 15000, 'standard': 35000},
+            '1080p': {'efficient': 5000,  'standard': 12000},
+            '720p':  {'efficient': 2500,  'standard': 5000},
+            '480p':  {'efficient': 1000,  'standard': 2000},
             'N/A':   {'efficient': 1000,  'standard': 1000}
         },
         'bonuses': {'modern_codec': 0.5, 'color_volume': 0.5, 'surround': 0.5, 'lossless_extra': 0.5},
         'labels': {
             'efficient_codecs': ['HEVC', 'H265', 'AV1'],
             'color_volume': ['HDR', 'DV', '10b'],
-            'surround': ['5.1', '7.1', 'TRUEHD', 'DTS-HD', 'FLAC'],
+            'surround': ['5.1', '7.1', 'TRUEHD', 'DTS-HD', 'FLAC', 'EAC3', 'ATMOS'],
             'lossless': ['TRUEHD', 'DTS-HD', 'FLAC']
         }
     }
 
     @classmethod
-    def calculate(cls, bitrate: Optional[float], res_label: str, v_codec: str, hdr_label: str, a_codec: str, score_audio: bool = False) -> str:
-        # Calculates a 1-5 score using a logarithmic scaling function based on target bitrates.
-        if not bitrate or res_label == 'N/A': return 'N/A'
-        actual_kbps = float(bitrate) / 1000
+    def calculate(cls, total_bitrate: Optional[float], res_label: str, v_codec: str, hdr_label: str, a_codec: str, fps_str: str, depth_str: str, score_audio: bool = False) -> str:
+        if not total_bitrate or res_label == 'N/A': return 'N/A'
+        actual_total_kbps = float(total_bitrate) / 1000
         res_key = next((k for k in ['4K', '1080p', '720p', '480p'] if k in res_label), 'N/A')
         
-        is_eff = any(x in v_codec for x in cls.DB['labels']['efficient_codecs'])
-        target_kbps = cls.DB['bitrate_targets_kbps'][res_key]['efficient' if is_eff else 'standard']
+        # --- MODULE 1: Audio Discrepancy Isolation ---
+        audio_deduction_kbps = 192 # Default stereo assumption
+        if any(x in a_codec for x in cls.DB['labels']['lossless']): audio_deduction_kbps = 3500
+        elif any(x in a_codec for x in ['EAC3', 'DTS', 'PCM']): audio_deduction_kbps = 768
+        elif '5.1' in a_codec or '7.1' in a_codec: audio_deduction_kbps = 448
         
-        score = cls.DB['base_scores'][res_key] * math.log10(min(1.0, actual_kbps / target_kbps) * 9 + 1)
+        est_video_kbps = max(100, actual_total_kbps - audio_deduction_kbps)
+
+        # --- MODULE 2: FPS Target Scaling ---
+        try: fps_val = float(fps_str)
+        except Exception: fps_val = 24.0
+        fps_multiplier = 1.5 if fps_val >= 48 else 1.0
+
+        # --- MODULE 3: Core Health Calculation ---
+        is_eff = any(x in v_codec for x in cls.DB['labels']['efficient_codecs'])
+        base_target_kbps = cls.DB['bitrate_targets_kbps'][res_key]['efficient' if is_eff else 'standard']
+        adjusted_target = base_target_kbps * fps_multiplier
+        
+        bitrate_ratio = est_video_kbps / adjusted_target
+        health_modifier = math.log10(bitrate_ratio * 9 + 1)
+        score = cls.DB['base_scores'][res_key] * health_modifier
+        
+        # --- MODULE 4: Bonuses and Penalties ---
         if is_eff: score += cls.DB['bonuses']['modern_codec']
         if any(x in hdr_label for x in cls.DB['labels']['color_volume']): score += cls.DB['bonuses']['color_volume']
         if any(x in a_codec for x in cls.DB['labels']['surround']): score += cls.DB['bonuses']['surround']
         if score_audio and any(x in a_codec for x in cls.DB['labels']['lossless']): score += cls.DB['bonuses']['lossless_extra']
+        
+        # Penalty: HEVC/AV1 encoded in 8-bit is an anti-pattern that introduces banding.
+        if is_eff and '8b' in depth_str: score -= 0.5 
 
-        return str(min(5, max(1, int(round(score)))))
+        final_score = int(math.floor(score + 0.5))
+        return str(min(7, max(1, final_score)))
 
 # ==============================================================================
 # SYSTEM MANAGEMENT
 # ==============================================================================
 
 def get_system_paths():
-    # Resolves absolute paths for the global executable and local Homebase per OS context.
     home_dir = Path.home()
     target_dir = home_dir / '.local' / 'bin'
     if 'ios' in sys.platform.lower() or '/var/mobile' in str(home_dir): target_dir = home_dir / 'bin'
@@ -347,7 +368,6 @@ def get_system_paths():
     return target_dir, target_dir / 'nnuva', home_dir / '.nnuva'
 
 def get_installed_version(target_path: str) -> Optional[str]:
-    # Reads the actively installed global binary to determine its version.
     if not os.path.exists(target_path): return None
     try:
         with open(target_path, 'r', encoding='utf-8') as f:
@@ -356,38 +376,12 @@ def get_installed_version(target_path: str) -> Optional[str]:
     except Exception: return 'Unknown'
     return None
 
-def get_recent_changelog(target_ver: Optional[str]) -> list:
-    # Parses this script's own docstring to extract changes since the user's installed version.
-    changes = []
-    try:
-        with open(os.path.abspath(__file__), 'r', encoding='utf-8') as f:
-            in_changelog = False
-            for line in f:
-                if line.startswith('# Changelog:'):
-                    in_changelog = True
-                    continue
-                if in_changelog:
-                    if not line.startswith('#'): break
-                    match = re.search(r'#\s+([0-9]+\.[0-9]+\.[0-9]+)', line)
-                    if match and match.group(1) == target_ver: break
-                    if len(changes) >= 10:
-                        changes.append("  ...and earlier changes.")
-                        break
-                    clean_line = line.replace('#', '', 1).strip()
-                    if clean_line: changes.append(clean_line)
-    except Exception:
-        pass
-    return changes
-
 def check_write_access(p: Path) -> bool:
-    # Recursively walks up a path to check if the user possesses system write permissions.
     curr = p
     while not curr.exists() and curr.parent != curr: curr = curr.parent
     return os.access(curr, os.W_OK)
 
 def perform_installation(force=False) -> bool:
-    # Executes the NNUVA installation routine. Verifies system permissions, 
-    # displays a pre-flight version checklist, and writes the binary to the system PATH.
     target_dir, target_path, cache_dir = get_system_paths()
     inst_ver = get_installed_version(str(target_path))
     bin_ok, cache_ok = check_write_access(target_dir), check_write_access(cache_dir)
@@ -395,19 +389,8 @@ def perform_installation(force=False) -> bool:
     print(f"\n{Color.CYAN}{Color.BOLD}=== NNUVA SYSTEM INSTALLER ==={Color.RESET}")
     print(f"  {Color.BOLD}Current Version:{Color.RESET}  {f'v{inst_ver}' if inst_ver else 'Not installed'}")
     print(f"  {Color.BOLD}Proposed Version:{Color.RESET} v{VERSION}\n")
-    
-    changes = get_recent_changelog(inst_ver)
-    if changes:
-        print(f"  {Color.BOLD}What's New:{Color.RESET}")
-        for c in changes:
-            print(f"  {Color.GRAY}{c}{Color.RESET}")
-        print()
-
     print(f"  {Color.BOLD}Target Binary:{Color.RESET}    {target_path}")
     print(f"  {Color.BOLD}Target Homebase:{Color.RESET}  {cache_dir}\n")
-    print(f"  {Color.BOLD}Permissions:{Color.RESET}")
-    print(f"    [{Color.GREEN if bin_ok else Color.RED}{'OK' if bin_ok else 'DENIED'}{Color.RESET}] Binary Directory")
-    print(f"    [{Color.GREEN if cache_ok else Color.RED}{'OK' if cache_ok else 'DENIED'}{Color.RESET}] Homebase Directory\n")
 
     if not (bin_ok and cache_ok) and not force:
         print(f"{Color.RED}Error: Insufficient permissions.{Color.RESET}")
@@ -430,7 +413,6 @@ def perform_installation(force=False) -> bool:
         return False
 
 def perform_uninstallation(force=False) -> None:
-    # Purges the NNUVA executable and the local Homebase/Cache from the user's filesystem.
     _, target_path, cache_dir = get_system_paths()
     paths_to_remove = [p for p in [target_path, Path.home() / '.local' / 'bin' / 'nnuva'] if p.exists()]
     
@@ -454,10 +436,8 @@ def perform_uninstallation(force=False) -> None:
         except Exception as e: print(f'{Color.RED}Failed to remove Homebase: {e}{Color.RESET}')
 
 def smart_install_prompt() -> None:
-    # Checks if the script being executed is newer than the system binary and prompts to update.
     if not sys.stdout.isatty(): return
     _, target_path, _ = get_system_paths()
-    
     if os.path.abspath(__file__) == str(target_path): return
     inst_ver = get_installed_version(str(target_path))
     if inst_ver == VERSION: return
@@ -465,7 +445,6 @@ def smart_install_prompt() -> None:
     print(f'{Color.CYAN}NNUVA v{VERSION} (Current script){Color.RESET}')
     if inst_ver:
         print(f'{Color.YELLOW}Your installed NNUVA is running v{inst_ver}. An update is available.{Color.RESET}')
-        
     if perform_installation(force=False):
         sys.exit(0)
     else:
@@ -476,19 +455,15 @@ def smart_install_prompt() -> None:
 # ==============================================================================
 
 def is_valid_dir(dirpath: Path) -> bool:
-    # Checks if a directory path should be traversed. Ignores designated paths like 'sample'.
     if dirpath.name.lower() == 'sample': return False
     return True
 
 def is_valid_media(filepath: Path) -> bool:
-    # Verifies the target is a supported file format and not an ignored file entity.
     if not filepath.is_file() or filepath.suffix.lower() not in SUPPORTED_EXTS: return False
     path_lower = str(filepath).lower()
     return not ('sample' in path_lower and re.search(r'(^|[\W_])sample([\W_]|$)', path_lower))
 
 def parse_ffprobe_data(data: dict, filepath: Path, size_bytes: int, dir_name: str, nqi_audio: bool) -> dict:
-    # The core extraction engine. Takes raw, noisy JSON dumped by ffprobe and 
-    # cleans it into human-readable data structures used by the CLI formatting engine.
     fmt = data.get('format', {})
     dur_raw = fmt.get('duration')
     bitrate = float(fmt['bit_rate']) if fmt.get('bit_rate') else ((size_bytes * 8) / float(dur_raw) if dur_raw and size_bytes else None)
@@ -506,8 +481,6 @@ def parse_ffprobe_data(data: dict, filepath: Path, size_bytes: int, dir_name: st
             has_video = True
             curr_w = s.get('width') or 0
             curr_h = s.get('height') or 0
-            
-            # Select the largest video stream; ignores tiny 1seg mobile streams in Japanese TS files.
             if (curr_w * curr_h) >= (width * height):
                 width, height = curr_w, curr_h
                 v_codec = s.get('codec_name', 'N/A').upper()
@@ -529,13 +502,12 @@ def parse_ffprobe_data(data: dict, filepath: Path, size_bytes: int, dir_name: st
 
         elif stype == 'subtitle':
             c = s.get('codec_name', '').lower()
-            label = 'PGS [BURN]' if 'pgs' in c else ('Text' if c else '')
+            label = 'PGS [BURN]' if 'pgs' in c else (c.upper() if c else '')
             if label and label not in s_codecs: s_codecs.append(label)
             if lang != 'UN': s_langs.append(lang)
 
     if not has_video: return {'skip': True}
 
-    # Checking height explicitly to catch anamorphic 1440x1080i broadcasts properly
     if width >= 3800 or height >= 2100: res_label = '4K'
     elif width >= 1900 or height >= 1000: res_label = '1080p'
     elif width >= 1200 or height >= 700: res_label = '720p'
@@ -553,15 +525,13 @@ def parse_ffprobe_data(data: dict, filepath: Path, size_bytes: int, dir_name: st
     return {
         'file': filepath.name, 'dir': dir_name, 'size_bytes': size_bytes, 'error': False, 'skip': False,
         'SIZE': format_size(size_bytes), 'DUR': format_duration(dur_raw), 'RES': res_label,
-        'NQI': NQI.calculate(bitrate, res_label, v_codec, hdr_label, a_full, nqi_audio),
+        'NQI': NQI.calculate(bitrate, res_label, v_codec, hdr_label, a_full, fps, depth, nqi_audio),
         'VIDEO': v_codec, 'AUDIO': a_full, 'SUBS': s_codecs[0] if s_codecs else '', 'HDR': hdr_label,
         'BITRATE': f'{round(bitrate / 1_000_000, 1)}M' if bitrate else 'N/A',
         'DEPTH': depth, 'FPS': fps, 'LANG': f"A:{','.join(a_uniq[:3])} S:{','.join(s_uniq[:3])}".strip(),
     }
 
 def analyze_file(filepath: Path, nqi_audio: bool = False) -> dict:
-    # Checks if a file's state exists in the local NNUVA cache. If so, returns it. 
-    # If not, invokes an `ffprobe` subprocess to scrape metadata, caches it, and returns the result.
     try: dir_name = str(filepath.parent.relative_to(Path.cwd()))
     except ValueError: dir_name = str(filepath.parent)
     if dir_name == '.': dir_name = 'CURRENT DIRECTORY'
@@ -571,7 +541,6 @@ def analyze_file(filepath: Path, nqi_audio: bool = False) -> dict:
 
     err_res = {'file': filepath.name, 'dir': dir_name, 'size_bytes': size_bytes, 'error': True, 'SIZE': format_size(size_bytes), 'NQI': 'ERR'}
     
-    # Creates a unique fingerprint binding the physical file state to the active parser logic version
     cache_key = f"v{CACHE_VERSION}_{filepath.absolute()}_{size_bytes}_{mtime}"
     
     if cached_data := global_cache.get(cache_key):
@@ -593,7 +562,6 @@ def analyze_file(filepath: Path, nqi_audio: bool = False) -> dict:
 # ==============================================================================
 
 class TreeNode:
-    # Represents a single structural node (directory or file) in the N-tier rendering engine.
     def __init__(self, name, is_dir=False):
         self.name = name
         self.is_dir = is_dir
@@ -602,14 +570,11 @@ class TreeNode:
         self.file_data = None
 
 def calc_tree_size(node: TreeNode) -> int:
-    # Recursively walks a TreeNode calculating aggregate data sizes from the bottom up.
     if not node.is_dir: return node.size
     node.size = sum(calc_tree_size(c) for c in node.children.values())
     return node.size
 
 def build_and_yield_tree(grouped_results: dict, top_dirs: list) -> Generator[Dict, None, None]:
-    # Dynamically builds an N-tier tree structure in memory and yields sequential, 
-    # flat rendering instructions equipped with precise graphical prefixes (├─ / └─).
     def traverse(node: TreeNode, prefix_list: list):
         files = []
         dirs = []
@@ -672,13 +637,14 @@ def build_and_yield_tree(grouped_results: dict, top_dirs: list) -> Generator[Dic
 # ==============================================================================
 
 def main() -> None:
-    # Main execution pipeline. Handles CLI argument parsing, manages the ThreadPoolExecutor, 
-    # orchestrates caching, calculates UI grid proportions, and prints the formatted result.
     parser = argparse.ArgumentParser(description=f'NNUVA v{VERSION} — video file analyzer')
     parser.add_argument('paths', nargs='*', default=[])
     parser.add_argument('-R', '--recursive', action='store_true')
     parser.add_argument('-a', '--all', action='store_true')
     parser.add_argument('-v', '--version', action='version', version=f'NNUVA v{VERSION}')
+    parser.add_argument('-l', '--list', action='store_true', help='Output a flat, sorted table without tree rendering')
+    parser.add_argument('-f', '--find', metavar='QUERY', help='Filter to files whose path contains QUERY (case-insensitive)')
+    parser.add_argument('-p', '--paths', action='store_true', dest='emit_paths', help='Output matching absolute file paths, one per line (skips analysis)')
     parser.add_argument('--nqi-audio', action='store_true', help='Include lossless audio bonus in NQI')
     parser.add_argument('-i', '--info', action='store_true', help='Show cache stats and install details')
     parser.add_argument('--install', action='store_true', help='Install NNUVA globally')
@@ -692,7 +658,7 @@ def main() -> None:
         else: print(f'{Color.GRAY}Cache already empty.{Color.RESET}')
         sys.exit(0)
     if args.info: 
-        global_homebase.display_info(global_cache.filepath, os.path.abspath(__file__))
+        global_homebase.display_info(global_cache.filepath, os.path.abspath(__file__), len(global_cache.data))
         sys.exit(0)
     if args.install: perform_installation(force=True); sys.exit(0)
 
@@ -704,31 +670,71 @@ def main() -> None:
         except Exception: pass
 
     files = []
-    for p_str in args.paths:
-        p = Path(p_str)
-        if '*' in p_str or '?' in p_str or not p.exists():
-            for f in Path('.').glob(p_str):
-                if is_valid_media(f): files.append(f)
-                elif f.is_dir() and is_valid_dir(f):
-                    for sub in f.iterdir():
-                        if is_valid_media(sub): files.append(sub)
-            continue
-            
-        if p.is_file() and is_valid_media(p): files.append(p)
-        elif p.is_dir() and is_valid_dir(p):
-            for root, dirs, files_in_root in os.walk(p):
-                dirs[:] = [d for d in dirs if is_valid_dir(Path(root) / d)]
-                files.extend(Path(root) / fname for fname in files_in_root if is_valid_media(Path(root) / fname))
+    
+    try:
+        if not args.emit_paths:
+            sys.stdout.write(f'{Color.CYAN}Discovering files...{Color.RESET}')
+            sys.stdout.flush()
+        
+        for p_str in args.paths:
+            p = Path(p_str)
+            if '*' in p_str or '?' in p_str or not p.exists():
+                for f in Path('.').glob(p_str):
+                    if is_valid_media(f): files.append(f)
+                    elif f.is_dir() and is_valid_dir(f):
+                        for sub in f.iterdir():
+                            if is_valid_media(sub): files.append(sub)
+                continue
+                
+            if p.is_file() and is_valid_media(p): files.append(p)
+            elif p.is_dir() and is_valid_dir(p):
+                for root, dirs, files_in_root in os.walk(p):
+                    dirs[:] = [d for d in dirs if is_valid_dir(Path(root) / d)]
+                    files.extend(Path(root) / fname for fname in files_in_root if is_valid_media(Path(root) / fname))
+                    
+        if not args.emit_paths:
+            sys.stdout.write('\r\033[K')
+            sys.stdout.flush()
+        
+    except KeyboardInterrupt:
+        sys.stdout.write('\r\033[K\n')
+        sys.exit(f'{Color.RED}Aborted during file discovery.{Color.RESET}')
 
     unique_files = list(set(files))
     if not unique_files: sys.exit(f'{Color.YELLOW}No supported video files found.{Color.RESET}')
+
+    if args.find:
+        tokens = args.find.lower().split()
+        exact = [f for f in unique_files if all(t in str(f).lower() for t in tokens)]
+        
+        if exact:
+            unique_files = exact
+        else:
+            # Fuzzy fallback: each token must be substring OR within 1 edit of some windowed substring of a path word
+            fuzzy = []
+            for f in unique_files:
+                path_lower = str(f).lower()
+                words = [w for w in re.split(r'[\s/_.\-\[\]\(\)]+', path_lower) if w]
+                if all(t in path_lower or _fuzzy_token_match(t, words) for t in tokens):
+                    fuzzy.append(f)
+            if fuzzy:
+                print(f'{Color.GRAY}(no exact matches; showing fuzzy results for "{args.find}"){Color.RESET}', file=sys.stderr)
+            unique_files = fuzzy
+        
+        if not unique_files: sys.exit(f'{Color.YELLOW}No files match: {args.find}{Color.RESET}')
+
+    if args.emit_paths:
+        for f in sorted(unique_files, key=lambda p: str(p).lower()):
+            print(f.absolute())
+        sys.exit(0)
 
     results = []
     executor = ThreadPoolExecutor(max_workers=MAX_THREADS)
     try:
         for i, fut in enumerate(as_completed([executor.submit(analyze_file, f, args.nqi_audio) for f in unique_files]), 1):
             if not (res := fut.result()).get('skip'): results.append(res)
-            sys.stdout.write(f'\r{Color.BOLD}Scanning {len(unique_files)} files... {int(i / len(unique_files) * 100)}%{Color.RESET}')
+            pct = i / len(unique_files)
+            sys.stdout.write(f'\r{Color.CYAN}{Color.BOLD}⬢ NNUVA{Color.RESET} Scanning {i}/{len(unique_files)} ... {Color.BOLD}{int(pct * 100)}%{Color.RESET} ')
             sys.stdout.flush()
     except KeyboardInterrupt:
         sys.stdout.write('\r\033[K\n')
@@ -754,31 +760,50 @@ def main() -> None:
     top_dirs = sorted(grouped.keys(), key=lambda x: (0 if x == 'CURRENT DIRECTORY' else 1, x.lower()))
     cols = ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'BITRATE', 'FPS', 'DEPTH', 'AUDIO', 'LANG', 'SUBS', 'HDR'] if args.all else ['SIZE', 'DUR', 'RES', 'NQI', 'VIDEO', 'AUDIO', 'SUBS', 'HDR']
 
-    tw = shutil.get_terminal_size().columns - 1
+    try:
+        tw = os.get_terminal_size().columns - 1
+    except OSError:
+        tw = int(os.environ.get('COLUMNS', 120)) - 1
+
     cw = {c: max([get_display_width(c), get_display_width(EXPLANATIONS[c])] + [get_display_width(str(r.get(c, ''))) for r in results] + ([get_display_width(format_size(sz)) for sz in top_sizes.values()] if c == 'SIZE' else [0])) for c in cols}
     fw  = max(20, tw - sum(cw.values()) - (len(cols) * 3))
     sep, div = f'{Color.GRAY}{"-" * tw}{Color.RESET}', f' {Color.GRAY}|{Color.RESET} '
 
     print(f'{sep}\n{Color.BOLD}{align_string("FILE", fw)}{Color.RESET}' + ''.join(f'{div}{Color.BOLD}{align_string(c, cw[c], "right" if c in ("SIZE", "DUR") else "center")}{Color.RESET}' for c in cols) + f'\n{sep}')
 
-    for idx, item in enumerate(build_and_yield_tree(grouped, top_dirs)):
-        if item['type'] == 'top_dir':
-            if idx > 0: print((' ' * fw) + ''.join(f'{div}{" " * cw[c]}' for c in cols))
-            print(style_folder_line(item['name'], fw, '') + render_columns({'is_dir_size': format_size(item['size'])}, cw, cols, div))
-        
-        elif item['type'] == 'sub_dir':
-            print(style_folder_line(item['name'], fw, prefix=item['prefix']) + render_columns({'is_dir_size': format_size(item['size'])}, cw, cols, div))
-        
-        elif item['type'] == 'file':
-            pref = item['prefix']
-            display_str = f"{pref}{item['name']}"
-            if get_display_width(display_str) > fw:
-                truncated_name = truncate(display_str, fw)[len(pref):]
-                name_styled = align_string(f'{Color.GRAY}{pref}{Color.RESET}{truncated_name}', fw)
+    if args.list:
+        flat_results = sorted(results, key=lambda x: x['file'].lower())
+        for r in flat_results:
+            flat_name = f"{r['dir']}/{r['file']}" if r['dir'] != 'CURRENT DIRECTORY' else r['file']
+            if get_display_width(flat_name) > fw:
+                truncated_name = truncate(flat_name, fw)
+                name_styled = align_string(f'{Color.WHITE}{Color.BOLD}{truncated_name}{Color.RESET}', fw)
             else:
-                name_styled = align_string(f'{Color.GRAY}{pref}{Color.RESET}{item["name"]}', fw)
+                if r['dir'] != 'CURRENT DIRECTORY':
+                    name_styled = align_string(f'{Color.GRAY}{r["dir"]}/{Color.RESET}{Color.WHITE}{Color.BOLD}{r["file"]}{Color.RESET}', fw)
+                else:
+                    name_styled = align_string(f'{Color.WHITE}{Color.BOLD}{r["file"]}{Color.RESET}', fw)
             
-            print(name_styled + render_columns(item['data'], cw, cols, div))
+            print(name_styled + render_columns(r, cw, cols, div))
+    else:
+        for idx, item in enumerate(build_and_yield_tree(grouped, top_dirs)):
+            if item['type'] == 'top_dir':
+                if idx > 0: print((' ' * fw) + ''.join(f'{div}{" " * cw[c]}' for c in cols))
+                print(style_folder_line(item['name'], fw, '') + render_columns({'is_dir_size': format_size(item['size'])}, cw, cols, div))
+            
+            elif item['type'] == 'sub_dir':
+                print(style_folder_line(item['name'], fw, prefix=item['prefix']) + render_columns({'is_dir_size': format_size(item['size'])}, cw, cols, div))
+            
+            elif item['type'] == 'file':
+                pref = item['prefix']
+                display_str = f"{pref}{item['name']}"
+                if get_display_width(display_str) > fw:
+                    truncated_name = truncate(display_str, fw)[len(pref):]
+                    name_styled = align_string(f'{Color.GRAY}{pref}{Color.RESET}{truncated_name}', fw)
+                else:
+                    name_styled = align_string(f'{Color.GRAY}{pref}{Color.RESET}{item["name"]}', fw)
+                
+                print(name_styled + render_columns(item['data'], cw, cols, div))
 
     print(f'{sep}\n{align_string(" ", fw)}' + ''.join(f'{div}{Color.GRAY}{align_string(EXPLANATIONS[c], cw[c], "right" if c in ("SIZE", "DUR") else "center")}{Color.RESET}' for c in cols) + f'\n{sep}')
 

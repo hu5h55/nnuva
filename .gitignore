@@ -1,0 +1,9 @@
+_archive/
+__pycache__/
+*.py[cod]
+*.html
+*.json
+._*
+.DS_Store
+*~
+#*#

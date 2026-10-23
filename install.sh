@@ -308,15 +308,18 @@ else
     SOURCE_DIR="${HOME}/.local/share/nnuva"
     mkdir -p "${HOME}/.local/share"
     if [[ -d "${SOURCE_DIR}/.git" ]]; then
-        (cd "$SOURCE_DIR" && git pull --quiet origin main 2>/dev/null || true)
+        (cd "$SOURCE_DIR" && git fetch --quiet origin main && git reset --hard origin/main 2>/dev/null || git pull --quiet origin main 2>/dev/null || true)
     elif command -v git >/dev/null 2>&1; then
         echo -e "${BOLD}Cloning NNUVA repository...${RESET}"
         git clone --quiet "$GIT_NNUVA" "$SOURCE_DIR"
     else
         mkdir -p "$SOURCE_DIR"
-        curl -fsSL "${REPO_NNUVA}/nnuva.py" -o "${SOURCE_DIR}/nnuva.py"
-        curl -fsSL "${REPO_NNUVA}/nnuva-report" -o "${SOURCE_DIR}/nnuva-report"
-        chmod +x "${SOURCE_DIR}/nnuva.py" "${SOURCE_DIR}/nnuva-report"
+        echo -e "${BOLD}Downloading NNUVA repository archive...${RESET}"
+        curl -fsSL "https://github.com/hu5h55/nnuva/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 -C "$SOURCE_DIR" 2>/dev/null || {
+            curl -fsSL "${REPO_NNUVA}/nnuva.py" -o "${SOURCE_DIR}/nnuva.py"
+            curl -fsSL "${REPO_NNUVA}/nnuva-report" -o "${SOURCE_DIR}/nnuva-report"
+        }
+        chmod +x "${SOURCE_DIR}/nnuva.py" "${SOURCE_DIR}/nnuva-report" 2>/dev/null || true
     fi
 fi
 

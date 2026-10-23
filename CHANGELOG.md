@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.0.4] - 2026-10-23
+
+### Changed
+- **Footer Kebab Menu Integration**: Replaced floating action button with a sleek circular kebab menu button (`#footerKebabBtn`, `⋮`) positioned cleanly in the bottom footer row directly next to the theme toggle pill.
+- **Dynamic Popup Anchoring**: Positioned the quick actions menu (`#meatballMenu`) to anchor smoothly right above the circular footer kebab button based on real-time viewport coordinates.
+- **Cleaned Footer Geometry**: Restored standard footer padding and body bottom spacing, removing unnecessary empty space and margin offsets formerly required by the floating button.
+
+---
+
 ## [6.0.3] - 2026-10-23
 
 ### Added

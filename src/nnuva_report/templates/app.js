@@ -259,7 +259,7 @@ window.openSysHealthModal = function() {
     const m = document.getElementById('sysHealthModal');
     if (m) m.style.display = 'flex';
     document.getElementById('meatballMenu')?.classList.remove('show');
-    document.getElementById('floatingHexBtn')?.classList.remove('active');
+    document.getElementById('footerKebabBtn')?.classList.remove('active');
 };
 
 window.closeSysHealthModal = function() {
@@ -1356,25 +1356,34 @@ window.toggleSysHealth = function() {
     }
 };
 
-window.toggleHexMenu = function(e) {
+window.toggleKebabMenu = function(e) {
     if (e) e.stopPropagation();
     const menu = document.getElementById('meatballMenu');
-    const btn = document.getElementById('floatingHexBtn');
+    const btn = document.getElementById('footerKebabBtn') || document.getElementById('floatingHexBtn');
     if (!menu) return;
     if (menu.classList.contains('show')) {
         menu.classList.remove('show');
         btn?.classList.remove('active');
         return;
     }
+    if (btn) {
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.bottom = `${Math.round(window.innerHeight - rect.top + 8)}px`;
+        menu.style.right = `${Math.max(16, Math.round(window.innerWidth - rect.right))}px`;
+        menu.style.top = 'auto';
+        menu.style.left = 'auto';
+    }
     menu.classList.add('show');
     btn?.classList.add('active');
 };
-window.toggleMeatballMenu = window.toggleHexMenu;
+window.toggleHexMenu = window.toggleKebabMenu;
+window.toggleMeatballMenu = window.toggleKebabMenu;
 
-// Click-outside handler for hex menu
+// Click-outside handler for kebab menu
 document.addEventListener('click', function(e) {
     const menu = document.getElementById('meatballMenu');
-    const btn = document.getElementById('floatingHexBtn');
+    const btn = document.getElementById('footerKebabBtn') || document.getElementById('floatingHexBtn');
     if (menu?.classList.contains('show') && !menu.contains(e.target) && !btn?.contains(e.target)) {
         menu.classList.remove('show');
         btn?.classList.remove('active');
@@ -1390,7 +1399,7 @@ document.addEventListener('keydown', function(e) {
         if (typeof closeHistoryModal === 'function') closeHistoryModal();
         if (typeof closeFilterModal === 'function') closeFilterModal();
         document.getElementById('meatballMenu')?.classList.remove('show');
-        document.getElementById('floatingHexBtn')?.classList.remove('active');
+        document.getElementById('footerKebabBtn')?.classList.remove('active');
     }
 });
 
@@ -4000,7 +4009,7 @@ async function bootDashboard() {
         const meatballChangelogBtn = document.getElementById('meatballChangelogBtn');
         if (meatballChangelogBtn) meatballChangelogBtn.addEventListener('click', function() {
             document.getElementById('meatballMenu')?.classList.remove('show');
-            document.getElementById('floatingHexBtn')?.classList.remove('active');
+            document.getElementById('footerKebabBtn')?.classList.remove('active');
             openChangelog();
         });
 

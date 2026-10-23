@@ -405,79 +405,39 @@
             right: 6px;
         }
 
-        /* FLOATING HEXAGON BUTTON & POPUP MENU ON BOTTOM RIGHT */
-        .floating-hex-btn {
-            position: fixed;
-            right: 24px;
-            bottom: 24px;
-            z-index: 9995;
-            width: 48px;
-            height: 48px;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            padding: 0;
+        /* KEBAB MENU BUTTON IN A CIRCLE (BOTTOM ROW, NEXT TO THEME PILL) */
+        .footer-kebab-btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            user-select: none;
-            outline: none;
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        /* Modern circular halo white glow */
-        .floating-hex-btn .hex-halo {
-            position: absolute;
-            width: 52px;
-            height: 52px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.4) 35%, rgba(56, 189, 248, 0.25) 55%, transparent 72%);
-            box-shadow: 0 0 24px 6px rgba(255, 255, 255, 0.75), 0 0 38px 10px var(--primary-glow, rgba(56, 189, 248, 0.5));
-            opacity: 0;
-            transform: scale(0.5);
-            transition: opacity 0.28s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-            pointer-events: none;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0;
+            margin-left: 4px;
+            transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
+            outline: none;
+            user-select: none;
         }
-        .floating-hex-btn:hover .hex-halo,
-        .floating-hex-btn.active .hex-halo {
-            opacity: 1;
-            transform: scale(1.18);
-        }
-        .floating-hex-btn:hover {
-            transform: scale(1.12) translateY(-2px);
-        }
-        .floating-hex-btn:active {
-            transform: scale(0.94);
-        }
-        .floating-hex-btn.active {
+        .footer-kebab-btn:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: var(--primary-bg, rgba(56, 189, 248, 0.12));
             transform: scale(1.08);
+            box-shadow: 0 0 10px var(--primary-glow);
         }
-        .floating-hex-btn .hex-btn-svg {
-            width: 42px;
-            height: 42px;
-            display: block;
-            overflow: visible;
-            position: relative;
-            z-index: 1;
-            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
-            transition: filter 0.25s ease;
+        .footer-kebab-btn:active {
+            transform: scale(0.95);
         }
-        .floating-hex-btn .hex-glyph {
-            fill: var(--primary);
-            stroke: rgba(255, 255, 255, 0.35);
-            stroke-width: 1.5;
-            transform-origin: 22px 22px;
-            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), fill 0.25s ease, stroke 0.25s ease;
-        }
-        .floating-hex-btn:hover .hex-glyph,
-        .floating-hex-btn.active .hex-glyph {
-            transform: rotate(30deg);
-            fill: #ffffff;
-            stroke: #ffffff;
-            stroke-width: 1.8;
-        }
-        .floating-hex-btn:hover .hex-btn-svg,
-        .floating-hex-btn.active .hex-btn-svg {
-            filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 28px var(--primary));
+        .footer-kebab-btn.active {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: var(--primary-bg, rgba(56, 189, 248, 0.18));
+            box-shadow: 0 0 10px var(--primary-glow);
         }
 
         .meatball-menu {
@@ -1194,7 +1154,7 @@
         /* Page footer — clean single line info bar at bottom */
         .page-footer {
             margin-top: 56px;
-            padding: 18px 0 84px 0;
+            padding: 18px 0 28px 0;
             border-top: 1px solid var(--border);
         }
         .page-footer-inner {
@@ -1216,7 +1176,6 @@
         }
         .page-footer-section-right {
             justify-content: flex-end;
-            margin-right: 48px; /* Leave breathing room for the floating hex button */
         }
         .theme-pill {
             display: inline-flex;
@@ -2280,28 +2239,28 @@ and distribution.</span>
                             <span style="font-size:0.85rem;line-height:1;display:block;">⬢</span>
                         </button>
                     </div>
+
+                    <button id="footerKebabBtn" class="footer-kebab-btn" onclick="toggleKebabMenu(event)" title="NNUVA Menu &amp; Quick Actions" aria-label="NNUVA Menu">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <circle cx="12" cy="5" r="1.75"></circle>
+                            <circle cx="12" cy="12" r="1.75"></circle>
+                            <circle cx="12" cy="19" r="1.75"></circle>
+                        </svg>
+                    </button>
                 </span>
             </div>
         </footer>
 
     </div>
 
-    <!-- FLOATING BOTTOM-RIGHT HEXAGON MENU TRIGGER -->
-    <button id="floatingHexBtn" class="floating-hex-btn" onclick="toggleHexMenu(event)" title="NNUVA Menu &amp; Diagnostics" aria-label="NNUVA Menu">
-        <span class="hex-halo" aria-hidden="true"></span>
-        <svg viewBox="0 0 44 44" class="hex-btn-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <polygon class="hex-glyph" points="22,3 39.3,13 39.3,31 22,41 4.7,31 4.7,13" />
-        </svg>
-    </button>
-
-    <!-- HEXAGON MENU POPUP (POPS UP FROM BOTTOM RIGHT) -->
+    <!-- NNUVA MENU POPUP -->
     <div class="meatball-menu" id="meatballMenu">
         <div class="hex-menu-header">
             <div class="hex-menu-brand">
                 <span style="color:var(--primary);font-size:1.1rem;line-height:1;">⬢</span>
                 <span style="font-weight:700;font-size:0.95rem;color:var(--text-main);">NNUVA Menu</span>
             </div>
-            <button type="button" class="hex-menu-close" onclick="document.getElementById('meatballMenu').classList.remove('show'); document.getElementById('floatingHexBtn')?.classList.remove('active');" title="Close menu" aria-label="Close menu">✕</button>
+            <button type="button" class="hex-menu-close" onclick="document.getElementById('meatballMenu').classList.remove('show'); document.getElementById('footerKebabBtn')?.classList.remove('active');" title="Close menu" aria-label="Close menu">✕</button>
         </div>
 
         <div class="mb-section-label">Quick Actions</div>

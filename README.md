@@ -15,15 +15,33 @@ Instead of dealing with unreadable JSON dumps or running manual `ffprobe` comman
 * **FFmpeg / ffprobe** installed and available in your system path.
 
 ## Installation
-Clone the repository and make the script executable. 
-For global use, simply run nnuva.py to copy to your local bin
 
-bash
-git clone https://github.com/hu5h55/nnuva.git
+### 1. The 1-Line Installer (Recommended)
+Installs `nnuva` CLI and optional `nnuva-report` dashboard with interactive configuration for automated cron jobs:
+```bash
+curl -fsSL https://raw.githubusercontent.com/hu5h55/nnuva/main/install.sh | bash
+```
 
-cd nnuva
-
+### 2. Standalone / Zero-Install Mode
+No installation or root required. Runs entirely in-memory without polluting your filesystem:
+```bash
+curl -O https://raw.githubusercontent.com/hu5h55/nnuva/main/nnuva.py
 chmod +x nnuva.py
+./nnuva.py /path/to/media
+```
+
+### 3. Git Clone & Local Install
+```bash
+git clone https://github.com/hu5h55/nnuva.git
+cd nnuva
+./install.sh
+```
+
+To cleanly uninstall at any time:
+```bash
+nnuva --uninstall
+# or: ./install.sh --uninstall
+```
 
 ## Usage
 Run NNUVA against a specific file, directory, or wildcard pattern. If no path is provided, it scans the current directory.
@@ -52,6 +70,11 @@ nnuva --res --video --bitrate --audio
 \`\`\`
 
 
+
+### Maintenance & Cache Management
+* `nnuva --prune` : Automatically removes stale cache entries for files that have been deleted, moved, or renamed.
+* `nnuva --clear-cache` : Resets the entire local cache database.
+* `nnuva -i` / `nnuva --info` : Inspect system installation paths, cache sizes, and instance IDs.
 
 ## License
 This project is licensed under the GNU General Public License v3.0 (GPLv3). See the `LICENSE` file for details.

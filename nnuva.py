@@ -11,6 +11,7 @@
 # ==============================================================================
 # CHANGELOG
 # ==============================================================================
+# v2.9.38 (2026-10-23) - ARCH: Standalone mode by default (in-memory, zero filesystem pollution without --install or --cache), added --prune for stale cache cleanup, and unified curl|bash installer.
 # v2.9.37 (2026-05-09) - UX: Summary NQI rows now align correctly (ANSI-aware width). NQI labels renamed to Sub-/Sub/Sub+/Acceptable/Optimal/Optimal+/Bloat for consistency with nnuva-report.
 # v2.9.36 (2026-05-05) - UX: Added -s/--summary flag, prompt default flipped to [Y/n], summary footer alignment fixed.
 # v2.9.35 (2026-05-05) - UX: Bottom recap row now reports session cache adds in the FILE column (truncated if needed).
@@ -49,7 +50,7 @@ from typing import Optional, Dict, Any, Generator
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "2.9.37"
+VERSION = "2.9.38"
 CACHE_VERSION = 4
 
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}
@@ -91,17 +92,20 @@ class HomebaseManager:
         self.dir = Path.home() / '.nnuva'
         self.filepath = self.dir / 'homebase.json'
         self.data = {}
-        self.initialize()
+        self.load()
 
-    def initialize(self):
+    def load(self):
         if self.filepath.exists():
             try:
                 with open(self.filepath, 'r', encoding='utf-8') as f:
                     self.data = json.load(f)
-                return
             except Exception:
                 pass
-        
+
+    def initialize(self):
+        if self.filepath.exists() and not self.data:
+            self.load()
+            if self.data: return
         raw_uuid = uuid.uuid1()
         self.data = {
             "instance_id": f"NNUVA-{raw_uuid.hex[-12:].upper()}-{raw_uuid.hex[:8].upper()}",
@@ -110,7 +114,7 @@ class HomebaseManager:
         }
         
         try:
-            self.dir.mkdir(exist_ok=True)
+            self.dir.mkdir(parents=True, exist_ok=True)
             with open(self.filepath, 'w', encoding='utf-8') as f:
                 json.dump(self.data, f, indent=4)
         except Exception:
@@ -121,8 +125,8 @@ class HomebaseManager:
         print(f"{Color.GRAY}----------------------------------------{Color.RESET}")
         print(f" {Color.BOLD}Version:{Color.RESET}       v{VERSION}")
         print(f" {Color.BOLD}Binary:{Color.RESET}        {exe_path}")
-        print(f" {Color.BOLD}Instance ID:{Color.RESET}   {self.data.get('instance_id', 'UNKNOWN')}")
-        print(f" {Color.BOLD}Installed:{Color.RESET}     {self.data.get('installed_at', 'UNKNOWN')[:10]}")
+        print(f" {Color.BOLD}Instance ID:{Color.RESET}   {self.data.get('instance_id', 'STANDALONE')}")
+        print(f" {Color.BOLD}Installed:{Color.RESET}     {self.data.get('installed_at', 'STANDALONE')[:10]}")
         print(f" {Color.BOLD}Database Path:{Color.RESET} {self.dir.absolute()}")
         cache_size = format_size(cache_filepath.stat().st_size) if cache_filepath.exists() else "0B"
         print(f" {Color.BOLD}Cache Size:{Color.RESET}    {cache_size}")
@@ -131,13 +135,14 @@ class HomebaseManager:
         
     
 class CacheManager:
-    def __init__(self):
+    def __init__(self, enabled: bool = True):
         self.dir = Path.home() / '.nnuva'
         self.filepath = self.dir / 'ffprobe_cache.json'
         self.data = {}
         self.lock = threading.Lock()
         self.is_dirty = False
         self.additions_this_session = 0
+        self.enabled = enabled
         self.load()
 
     def load(self):
@@ -165,16 +170,45 @@ class CacheManager:
             if key not in self.data:
                 self.additions_this_session += 1
             self.data[key] = val
-            self.is_dirty = True
+            if self.enabled:
+                self.is_dirty = True
 
-    def save(self):
+    def save(self, force: bool = False):
+        if not self.enabled and not force:
+            return
         if self.is_dirty:
             try:
-                self.dir.mkdir(exist_ok=True)
+                self.dir.mkdir(parents=True, exist_ok=True)
                 with open(self.filepath, 'w', encoding='utf-8') as f:
                     json.dump(self.data, f, indent=2)
+                self.is_dirty = False
             except Exception as e:
                 print(f"{Color.RED}Warning: Could not save cache to {self.filepath} ({e}){Color.RESET}")
+
+    def prune(self) -> int:
+        prefix = f"v{CACHE_VERSION}_"
+        stale_keys = []
+        for key in list(self.data.keys()):
+            if not key.startswith(prefix):
+                stale_keys.append(key)
+                continue
+            try:
+                parts = key[len(prefix):].split('_')
+                parts.pop()
+                parts.pop()
+                file_path_str = '_'.join(parts)
+                if not os.path.exists(file_path_str):
+                    stale_keys.append(key)
+            except Exception:
+                stale_keys.append(key)
+        
+        if stale_keys:
+            with self.lock:
+                for k in stale_keys:
+                    self.data.pop(k, None)
+                self.is_dirty = True
+            self.save(force=True)
+        return len(stale_keys)
 
 global_homebase = HomebaseManager()
 global_cache = CacheManager()
@@ -378,6 +412,18 @@ def get_system_paths():
     elif not target_dir.exists() and (home_dir / 'bin').exists(): target_dir = home_dir / 'bin'
     return target_dir, target_dir / 'nnuva', home_dir / '.nnuva'
 
+def is_installed_environment() -> bool:
+    target_dir, target_path, cache_dir = get_system_paths()
+    try:
+        resolved_self = Path(__file__).resolve()
+        if resolved_self == target_path.resolve() or resolved_self.parent == target_dir.resolve():
+            return True
+    except Exception:
+        pass
+    if (cache_dir / 'homebase.json').exists():
+        return True
+    return False
+
 def get_installed_version(target_path: str) -> Optional[str]:
     if not os.path.exists(target_path): return None
     try:
@@ -393,6 +439,10 @@ def check_write_access(p: Path) -> bool:
     return os.access(curr, os.W_OK)
 
 def perform_installation(force=False) -> bool:
+    adjacent_installer = Path(__file__).parent / 'install.sh'
+    if adjacent_installer.exists():
+        res = subprocess.run(['bash', str(adjacent_installer)])
+        return res.returncode == 0
     target_dir, target_path, cache_dir = get_system_paths()
     inst_ver = get_installed_version(str(target_path))
     bin_ok, cache_ok = check_write_access(target_dir), check_write_access(cache_dir)
@@ -424,6 +474,10 @@ def perform_installation(force=False) -> bool:
         return False
 
 def perform_uninstallation(force=False) -> None:
+    adjacent_installer = Path(__file__).parent / 'install.sh'
+    if adjacent_installer.exists():
+        subprocess.run(['bash', str(adjacent_installer), '--uninstall'])
+        return
     _, target_path, cache_dir = get_system_paths()
     paths_to_remove = [p for p in [target_path, Path.home() / '.local' / 'bin' / 'nnuva'] if p.exists()]
     
@@ -447,19 +501,8 @@ def perform_uninstallation(force=False) -> None:
         except Exception as e: print(f'{Color.RED}Failed to remove Homebase: {e}{Color.RESET}')
 
 def smart_install_prompt() -> None:
-    if not sys.stdout.isatty(): return
-    _, target_path, _ = get_system_paths()
-    if os.path.abspath(__file__) == str(target_path): return
-    inst_ver = get_installed_version(str(target_path))
-    if inst_ver == VERSION: return
-    
-    print(f'{Color.CYAN}NNUVA v{VERSION} (Current script){Color.RESET}')
-    if inst_ver:
-        print(f'{Color.YELLOW}Your installed NNUVA is running v{inst_ver}. An update is available.{Color.RESET}')
-    if perform_installation(force=False):
-        sys.exit(0)
-    else:
-        print()
+    # Standalone mode runs cleanly without blocking interactive prompts
+    return
 
 # ==============================================================================
 # FFPROBE PARSER & ENGINE
@@ -727,8 +770,10 @@ def render_summary(results: list, top_sizes: dict, find_query: Optional[str] = N
     if hdr_counts and len(hdr_counts) > 1: fmt_dist(hdr_counts, 'HDR       ')
     
     added = global_cache.additions_this_session
-    if added > 0:
+    if global_cache.enabled and added > 0:
         print(f' {Color.GRAY}⬢ {added} new entr{"y" if added == 1 else "ies"} cached this run{Color.RESET}')
+    elif not global_cache.enabled:
+        print(f' {Color.GRAY}⬢ Standalone mode (in-memory run){Color.RESET}')
     
     print(f'\n {Color.GRAY}{len(results):,} files matched. Use{Color.RESET} {Color.BOLD}--full{Color.RESET} {Color.GRAY}to see the full table.{Color.RESET}')
     print(f'{sep}')
@@ -750,6 +795,9 @@ def main() -> None:
     parser.add_argument('-p', '--paths', action='store_true', dest='emit_paths', help='Output matching absolute file paths, one per line (skips analysis)')
     parser.add_argument('--nqi-audio', action='store_true', help='Include lossless audio bonus in NQI')
     parser.add_argument('-i', '--info', action='store_true', help='Show cache stats and install details')
+    parser.add_argument('--prune', action='store_true', help='Remove stale cache entries for deleted or moved files')
+    parser.add_argument('--cache', action='store_true', help='Force persistent disk caching in standalone mode')
+    parser.add_argument('--no-cache', action='store_true', help='Disable disk caching (in-memory run)')
     parser.add_argument('--install', action='store_true', help='Install NNUVA globally')
     parser.add_argument('--clear-cache', action='store_true', help='Clear local database cache')
     parser.add_argument('--uninstall', action='store_true', help='Remove NNUVA entirely')
@@ -764,6 +812,17 @@ def main() -> None:
         global_homebase.display_info(global_cache.filepath, os.path.abspath(__file__), len(global_cache.data))
         sys.exit(0)
     if args.install: perform_installation(force=True); sys.exit(0)
+
+    is_installed = is_installed_environment()
+    global_cache.enabled = (is_installed or args.cache) and not args.no_cache
+
+    if args.prune and not args.paths:
+        count = global_cache.prune()
+        if count > 0:
+            print(f"{Color.GREEN}✓ Pruned {count} stale entries from cache.{Color.RESET}")
+        else:
+            print(f"{Color.GRAY}Cache is completely clean (0 stale entries).{Color.RESET}")
+        sys.exit(0)
 
     smart_install_prompt()
     if not shutil.which('ffprobe'): sys.exit("Error: ffprobe missing")
@@ -847,7 +906,12 @@ def main() -> None:
         sys.stdout.write('\r\033[K')
         sys.stdout.flush()
         executor.shutdown(wait=False)
-        global_cache.save()
+        if args.prune:
+            pruned = global_cache.prune()
+            if pruned > 0:
+                print(f"{Color.GREEN}✓ Pruned {pruned} stale cache entries.{Color.RESET}")
+        else:
+            global_cache.save()
 
     grouped = defaultdict(list)
     top_sizes = defaultdict(int)
@@ -928,8 +992,14 @@ def main() -> None:
 
     # Bottom recap: blank FILE slot is repurposed for session cache-add notification (truncated if too long)
     added = global_cache.additions_this_session
-    if added > 0:
+    if global_cache.enabled and added > 0:
         notice_text = f'⬢ {added} new entr{"y" if added == 1 else "ies"} cached'
+    elif not global_cache.enabled:
+        notice_text = '⬢ In-memory run'
+    else:
+        notice_text = ''
+
+    if notice_text:
         if get_display_width(notice_text) > fw:
             notice_text = truncate(notice_text, fw)
         notice_slot = align_string(f'{Color.GRAY}{notice_text}{Color.RESET}', fw)
@@ -937,6 +1007,9 @@ def main() -> None:
         notice_slot = align_string(" ", fw)
     
     print(f'{sep}\n{notice_slot}' + ''.join(f'{div}{Color.GRAY}{align_string(EXPLANATIONS[c], cw[c], "right" if c in ("SIZE", "DUR") else "center")}{Color.RESET}' for c in cols) + f'\n{sep}')
+
+    if not global_cache.enabled and sys.stdout.isatty():
+        print(f"\n{Color.GRAY}💡 Tip: Enable persistent caching & reports via: {Color.CYAN}curl -fsSL https://raw.githubusercontent.com/hu5h55/nnuva/main/install.sh | bash{Color.RESET}")
 
 if __name__ == '__main__':
     main()

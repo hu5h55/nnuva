@@ -2,7 +2,9 @@ _archive/
 __pycache__/
 *.py[cod]
 *.html
+!src/**/templates/*.html
 *.json
+!src/**/templates/*.json
 ._*
 .DS_Store
 *~

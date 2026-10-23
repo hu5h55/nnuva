@@ -1,0 +1,2625 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="oled" style="scroll-behavior: smooth;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NNUVA Library Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cpath%20d%3D%22M16%202.31%2027.86%209.15v13.69L16%2029.69%204.14%2022.85V9.15z%22%20fill%3D%22%230f172a%22%2F%3E%3Cpath%20d%3D%22M16%207.31%2023.53%2011.65v8.69L16%2024.69l-7.53-4.34v-8.69z%22%20fill%3D%22%23ffffff%22%2F%3E%3C%2Fsvg%3E">
+    
+    __NNUVA_CSS__
+
+    <style>
+        body {
+            margin: 0;
+            padding-top: 0 !important;
+            padding-bottom: 16px !important;
+            background-color: var(--bg-body);
+        }
+        body.has-floating-gavel {
+            /* When the floating bar is visible, give it room */
+            padding-top: 0 !important;
+        }
+        body.has-floating-gavel.has-filter-bar {
+            padding-top: 42px !important;
+        }
+        body.has-notif-bar {
+            padding-bottom: 70px !important;
+        }
+        /* When floating gavel is visible the filter bar fixes below it */
+        body.has-floating-gavel .filter-gavel.active {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            margin: 0;
+            border-radius: 0;
+            height: 42px;
+            padding: 0 18px;
+            background: #fee2e2;
+            border-bottom: 3px solid #dc2626;
+            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.20);
+        }
+        /* When NOT floating, filter bar lives inline in the container as a sleek pill */
+        body:not(.has-floating-gavel) .filter-gavel.active {
+            position: relative;
+            top: auto;
+            left: auto;
+            right: auto;
+            margin: 0 0 24px 0;
+            height: 38px;
+            padding: 0 14px 0 16px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-left: 3px solid #dc2626;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(220, 38, 38, 0.06);
+        }
+        /* Inline: remove fixed-bar dismiss button styling, use compact one */
+        body:not(.has-floating-gavel) .filter-gavel.active .gfb-dismiss {
+            right: 6px;
+            width: 24px;
+            height: 24px;
+            background: transparent;
+            color: #dc2626;
+            box-shadow: none;
+        }
+        body:not(.has-floating-gavel) .filter-gavel.active .gfb-dismiss:hover {
+            background: rgba(220, 38, 38, 0.10);
+            box-shadow: none;
+        }
+        body:not(.has-floating-gavel) .filter-gavel.active #globalFilterBar {
+            padding-right: 32px;
+        }
+        /* Pills inside the inline pill-shaped bar — softer, less heavy */
+        body:not(.has-floating-gavel) .filter-gavel.active .gfb-pill {
+            background: #ffffff;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+        body:not(.has-floating-gavel) .filter-gavel.active .gfb-pill .gfb-key {
+            color: #dc2626;
+        }
+        /* No padding-top needed when filter bar is inline; only when fixed */
+        body.has-floating-gavel.has-filter-bar {
+            padding-top: 42px !important;
+        }
+
+        /* Hero header bar — top of page only, before user scrolls */
+        .hero-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding-top: 22px;
+        }
+        .hero-bar h1 { line-height: 1.1; margin: 0; }
+
+        /* Clickable NNUVA title acts as the hex-menu trigger */
+        .hero-title-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 10px;
+            padding: 6px 12px;
+            margin-left: -12px;
+            cursor: pointer;
+            font: inherit;
+            color: inherit;
+            text-align: left;
+            transition: background 0.15s ease, border-color 0.15s ease;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+        }
+        .hero-title-btn:hover {
+            background: rgba(56, 189, 248, 0.06);
+            border-color: var(--border);
+        }
+        .hero-title-btn:active { transform: scale(0.995); }
+
+        /* Real search input in hero — sits in the middle, kebab anchors right */
+        .hero-search-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 360px;
+            margin-left: auto;
+        }
+
+        .hero-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
+            padding: 0;
+            flex-shrink: 0;
+            margin-left: auto; /* pin to right edge of hero */
+        }
+        .hero-icon-btn:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .hero-icon-btn:active { transform: scale(0.94); }
+
+        /* Clickable KPI breakdown rows — hover state */
+        .kpi-row-clickable:hover {
+            background: rgba(56, 189, 248, 0.08) !important;
+        }
+
+        /* Sortable table headers */
+        th.sortable-th {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        th.sortable-th:hover {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.04);
+        }
+        .sortable-th-inner {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        th.sortable-th.text-right .sortable-th-inner {
+            justify-content: flex-end;
+            width: 100%;
+        }
+        .sort-indicator {
+            display: inline-flex;
+            align-items: center;
+            color: var(--text-muted);
+            transition: color 0.15s ease;
+        }
+        th.sortable-th:hover .sort-indicator {
+            color: var(--primary);
+        }
+        /* When a header is the active sort, highlight the active arrow */
+        .sort-indicator.sort-asc svg path:first-child {
+            opacity: 1 !important;
+            color: var(--primary);
+        }
+        .sort-indicator.sort-asc svg path:last-child {
+            opacity: 0.20 !important;
+        }
+        .sort-indicator.sort-desc svg path:first-child {
+            opacity: 0.20 !important;
+        }
+        .sort-indicator.sort-desc svg path:last-child {
+            opacity: 1 !important;
+            color: var(--primary);
+        }
+        .sort-indicator.sort-asc,
+        .sort-indicator.sort-desc {
+            color: var(--primary);
+        }
+
+        /* FILTER GAVEL — second fixed bar, sits directly below top-gavel */
+        .filter-gavel {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            height: 42px;
+            padding: 0 18px;
+            background: var(--bg-body);
+            border-bottom: 1px solid var(--border);
+            z-index: 9989;
+            display: none; /* hidden until a filter pill exists */
+            align-items: center;
+            box-sizing: border-box;
+            gap: 8px;
+        }
+        .filter-gavel.active {
+            display: flex;
+        }
+        @keyframes filterGavelSlide {
+            0%   { transform: translateY(-100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes filterPillFade {
+            0%   { opacity: 0; transform: translateY(-4px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        body.has-floating-gavel .filter-gavel.active {
+            animation: filterGavelSlide 0.22s ease-out;
+        }
+        body:not(.has-floating-gavel) .filter-gavel.active {
+            animation: filterPillFade 0.18s ease-out;
+        }
+        .filter-gavel .gfb-clear {
+            height: 28px;
+            padding: 0 11px;
+            font-size: 0.72rem;
+        }
+
+        /* "Filters" label on far left of the bar */
+        .filter-gavel .gfb-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #b91c1c;
+            letter-spacing: 0.02em;
+            user-select: none;
+            flex-shrink: 0;
+            padding-right: 2px;
+        }
+
+        /* + Add filter button (just right of the Filters label) */
+        .filter-gavel .gfb-add {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            flex-shrink: 0;
+            box-shadow: 0 1px 4px rgba(56, 189, 248, 0.35);
+            transition: background 0.15s ease, transform 0.12s ease;
+            padding: 0;
+            margin-right: 4px;
+        }
+        .filter-gavel .gfb-add:hover {
+            background: #0ea5e9;
+            transform: scale(1.06);
+        }
+        .filter-gavel .gfb-add:active { transform: scale(0.92); }
+        /* Inline-pill state — softer + button */
+        body:not(.has-floating-gavel) .filter-gavel.active .gfb-add {
+            background: transparent;
+            color: var(--primary);
+            border: 1px solid rgba(56, 189, 248, 0.45);
+            box-shadow: none;
+        }
+        body:not(.has-floating-gavel) .filter-gavel.active .gfb-add:hover {
+            background: rgba(56, 189, 248, 0.10);
+            border-color: var(--primary);
+        }
+        /* Pills inside the active red bar — saturated, solid surfaces */
+        .filter-gavel.active .gfb-pill {
+            border-color: #dc2626;
+            background: #ffffff;
+            color: #7f1d1d;
+        }
+        .filter-gavel.active .gfb-pill .gfb-key {
+            color: #b91c1c;
+        }
+        .filter-gavel.active .gfb-clear {
+            border-color: #dc2626;
+            color: #b91c1c;
+        }
+        .filter-gavel.active .gfb-clear:hover {
+            background: #dc2626;
+            color: #fff;
+            border-color: #dc2626;
+        }
+
+        /* SEARCH BAR inside top gavel */
+        .gavel-search-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+        }
+        .gavel-search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--text-muted);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+        }
+        .gavel-search {
+            width: 100%;
+            height: 32px;
+            padding: 0 64px 0 32px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--bg-body);
+            color: var(--text-main);
+            font-size: 0.82rem;
+            outline: none;
+            font-family: inherit;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .gavel-search::placeholder { color: var(--text-muted); }
+        .gavel-search:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+        }
+        .gavel-search.has-value {
+            border-color: var(--primary);
+        }
+        /* Dark theme — top bar tuning */
+        /* Inline ✕ clear (only visible when has-value) */
+        .gavel-search-clear {
+            position: absolute;
+            right: 36px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0 2px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            transition: color 0.15s ease;
+        }
+        .gavel-search-clear:hover { color: var(--text-main); }
+        /* Inline library-jump button on the right edge of the search */
+        .gavel-search-action {
+            position: absolute;
+            right: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 999px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .gavel-search-action:hover {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.10);
+        }
+        .gavel-search-action .enter-hint {
+            font-size: 0.62rem;
+            color: var(--text-muted);
+            margin-left: 2px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+        .gavel-search.has-value ~ .gavel-search-action {
+            color: var(--primary);
+        }
+        /* Inline library search has no jump action — tighter right padding */
+        .library-search-wrap .gavel-search {
+            padding-right: 32px;
+        }
+        .library-search-wrap .gavel-search-clear {
+            right: 6px;
+        }
+
+        /* RIGHT cluster — kebab menu */
+        .meatball-wrap { position: relative; }
+        .meatball-menu {
+            position: absolute;
+            top: 42px;
+            right: 0;
+            display: none;
+            flex-direction: column;
+            min-width: 280px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+            padding: 10px 0;
+            z-index: 99999;
+        }
+        .meatball-menu.show {
+            display: flex;
+            animation: gavelDrop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .meatball-menu .mb-section-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            padding: 6px 16px 4px;
+        }
+        .meatball-menu .mb-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            padding: 4px 16px;
+            font-size: 0.78rem;
+            color: var(--text-main);
+            gap: 12px;
+        }
+        .meatball-menu .mb-row .mb-key {
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .meatball-menu .mb-row .mb-val {
+            color: var(--text-main);
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .meatball-menu .mb-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 8px 0;
+        }
+        .meatball-menu .mb-action {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 16px;
+            font-size: 0.82rem;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: background 0.12s ease;
+            border: none;
+            background: none;
+            text-align: left;
+            font-family: inherit;
+            text-decoration: none;
+        }
+        .meatball-menu .mb-action:hover {
+            background: rgba(56, 189, 248, 0.08);
+            color: var(--primary);
+        }
+        /* Dark theme tuning for the meatball dropdown */
+        /* Hex dropdown — same treatment in dark */
+
+        /* Filter gavel — small red close button aligned with top bar's right edge */
+        .filter-gavel .gfb-dismiss {
+            display: none;
+            position: absolute;
+            right: 24px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 22px;
+            height: 22px;
+            border-radius: 999px;
+            background: #dc2626;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+            box-shadow: 0 1px 4px rgba(220, 38, 38, 0.35);
+            padding: 0;
+        }
+        .filter-gavel.active .gfb-dismiss {
+            display: inline-flex;
+        }
+        .filter-gavel .gfb-dismiss:hover {
+            background: #b91c1c;
+            box-shadow: 0 2px 8px rgba(220, 38, 38, 0.5);
+        }
+        .filter-gavel .gfb-dismiss:active {
+            transform: translateY(-50%) scale(0.88);
+        }
+        /* Reserve room on the right so pills don't slide under the dismiss ✕ */
+        .filter-gavel.active #globalFilterBar {
+            padding-right: 36px;
+        }
+
+        /* Smooth UI Transitions & Backdrops */
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.75) !important;
+            backdrop-filter: blur(5px);
+            animation: fadeInBg 0.25s ease forwards;
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+            z-index: 9999998; cursor: pointer;
+        }
+        @keyframes fadeInBg { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUpFade { from { opacity: 0; transform: translateX(-50%) translateY(20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        
+        .modal-wrapper {
+            position: fixed;
+            top: 5vh;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999999;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 95%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: slideUpFade 0.3s ease forwards;
+            cursor: default;
+        }
+        
+        .modal-header-fixed {
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-body);
+            flex-shrink: 0; /* Never collapse */
+            z-index: 10;
+        }
+        .modal-body-scrollable {
+            padding: 25px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        /* Modal header copy buttons (filename + full path) */
+        .modal-copy-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: all 0.15s ease;
+            padding: 0;
+        }
+        .modal-copy-btn:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .modal-copy-btn:active {
+            transform: scale(0.92);
+        }
+        .modal-copy-btn.copied {
+            color: #22c55e;
+            border-color: #22c55e;
+            background: rgba(34, 197, 94, 0.10);
+        }
+
+        /* Floating "Copied!" popover anchored to the trigger button */
+        .copy-popover {
+            position: fixed;
+            transform: translate(-50%, -100%) translateY(4px);
+            background: #16a34a;
+            color: #fff;
+            font-size: 0.74rem;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 6px;
+            box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+            opacity: 0;
+            pointer-events: none;
+            white-space: nowrap;
+            z-index: 999999;
+            transition: opacity 0.15s ease, transform 0.18s ease;
+        }
+        .copy-popover.show {
+            opacity: 1;
+            transform: translate(-50%, -100%) translateY(0);
+        }
+        .copy-popover::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #16a34a;
+        }
+
+        /* File modal layout: 70/30 top row, full-width transcode below */
+        .modal-top-grid {
+            display: grid;
+            grid-template-columns: 7fr 3fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 720px) {
+            .modal-top-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+        }
+        .modal-transcode-row {
+            border-top: 1px dashed var(--border);
+            padding-top: 20px;
+        }
+
+        /* File identity rows in modal right panel */
+        .modal-id-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px dashed var(--border);
+        }
+        .modal-id-row:last-of-type { border-bottom: none; }
+        .modal-id-row-flat {
+            border-bottom: none !important;
+            padding: 4px 0;
+        }
+        .modal-id-row-content {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .modal-id-row-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 3px;
+        }
+        .modal-id-row-value {
+            color: var(--text-main);
+            font-size: 0.82rem;
+            font-weight: 500;
+            word-break: break-all;
+            line-height: 1.3;
+        }
+        .modal-id-row-mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        /* CARD & CHART LAYOUT */
+        .resizable-row {
+            resize: vertical;
+            overflow: hidden;
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            padding: 2px 2px 2px 0; /* prevents overflow:hidden from clipping card borders */
+            box-sizing: border-box;
+        }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            flex: 1 1 auto;
+            min-height: 0;
+            box-sizing: border-box;
+        }
+        /* Each card: just the chart, full height, clean border */
+        .chart-container {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            transition: box-shadow 0.2s ease;
+            min-height: 0;
+        }
+        .chart-container:hover {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.07);
+        }
+        /* Trend card expand button: sits inline in card-header, not absolute */
+        /* Fullscreen mode: show the trend container's normally-hidden header so the X has a home */
+        .chart-fullscreen .card-header {
+            display: flex !important;
+        }
+        /* Chart canvas area fills the entire card */
+        .chart-wrapper {
+            flex: 1 1 0%;
+            min-height: 0;
+            position: relative;
+            padding: 18px 18px 14px 18px;
+            box-sizing: border-box;
+        }
+        .chart-wrapper canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* Card header: title + subtitle */
+        .card-header {
+            flex: 0 0 auto;
+            padding: 14px 18px 4px 18px;
+            box-sizing: border-box;
+        }
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0;
+            line-height: 1.3;
+            letter-spacing: -0.01em;
+        }
+        .card-subtitle {
+            font-size: 0.74rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        /* Info bar: pill floats absolutely, details span full width and center within the card */
+        .info-bar {
+            flex: 0 0 56px;
+            height: 56px;
+            border-top: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.018);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 16px;
+            box-sizing: border-box;
+        }
+        .info-pill-slot {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 16px;
+            display: flex;
+            align-items: center;
+            max-width: calc(50% - 80px); /* leaves clear margin from the centered details */
+            overflow: hidden;
+            pointer-events: auto;
+            z-index: 2;
+        }
+        .info-pill {
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            letter-spacing: 0.01em;
+            border: 1px solid rgba(0,0,0,0.18);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            line-height: 1.4;
+        }
+        .info-pill.ghost {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px dashed var(--border);
+            font-weight: 500;
+            box-shadow: none;
+            opacity: 0.7;
+        }
+        /* Details centered relative to the entire card, with safe gutters so they never collide with the pill */
+        .info-details {
+            font-size: 0.82rem;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-align: center;
+            max-width: calc(100% - 240px);
+            padding: 0 8px;
+            box-sizing: border-box;
+        }
+        /* Tighter chart wrapper for cards that have header + info bar; bottom breathing room */
+        .chart-grid .chart-wrapper {
+            padding: 4px 14px 14px 14px;
+        }
+        /* Trend row: a bit taller than the others, tighter top padding (legend already separates) */
+        #trendRow {
+            min-height: 500px;
+        }
+        /* Trend body splits into a left icon rail and the chart area */
+        /* Preset tab strip — quick switches between curated metric sets */
+        /* Dark theme — Historical Trends area text contrast bump */
+        /* Per-card bottom info bar — always present so the card height never shifts.
+           Empty state shows a subtle "Hover for details" hint, hover state shows pill+text.
+           Centered (except trend chart which is left-aligned to stay clear of the icon rail). */
+        .card-info-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-top: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.012);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex-shrink: 0;
+            line-height: 1.4;
+            min-height: 34px;
+            max-height: 34px;
+            box-sizing: border-box;
+            transition: color 0.18s ease;
+        }
+        .card-info-bar.show {
+            color: var(--text-main);
+        }
+        .card-info-bar .card-info-bar-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+        /* Trend card: align bar contents from the LEFT so the icon rail doesn't visually offset the centered text */
+        /* Stale floating hover pill from earlier iteration — keep hidden if any leak in */
+        .card-hover-pill { display: none !important; }
+        /* Compact legend pills used inside chart cards (codec/audio/hdr) */
+        .legend-bar.legend-pills {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: center;
+            gap: 6px;
+            padding: 6px 14px;
+            margin: 0;
+            flex-shrink: 0;
+            min-height: 60px; /* keeps chart canvas vertically aligned across cards regardless of pill wrap */
+            box-sizing: border-box;
+        }
+        /* UNIFIED LEGEND PILL DESIGN — same style everywhere (trend chart, codec/audio/hdr) */
+        .legend-pill {
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            white-space: nowrap;
+            cursor: pointer;
+            border: 1px solid rgba(0,0,0,0.18);
+            transition: opacity 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+            letter-spacing: 0.01em;
+            line-height: 1.4;
+            background: transparent;
+        }
+        .legend-pill:hover {
+            box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px rgba(0,0,0,0.45);
+        }
+
+        /* FULLSCREEN CHART OVERLAYS */
+        #fsBackdrop {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+            z-index: 9995; display: none; cursor: pointer;
+        }
+        .chart-fullscreen {
+            position: fixed !important;
+            top: 5vh !important;
+            left: 5vw !important;
+            width: 90vw !important;
+            height: 90vh !important;
+            z-index: 9999 !important;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5) !important;
+            border-radius: 12px !important;
+            cursor: default;
+            /* Match .modal-wrapper: outer is hidden, only the body scrolls */
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
+        /* Scrollable body wrapper — JS-injected in toggleFullscreen, mirrors .modal-body-scrollable */
+        .chart-fullscreen .chart-fullscreen-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        /* In fullscreen: header matches the file modal exactly.
+           Grid layout: title row + subtitle row on the left column,
+           close ✕ on the right column spanning both rows. */
+        .chart-fullscreen .card-header {
+            flex-shrink: 0;
+            background: var(--bg-body) !important;
+            border-bottom: 1px solid var(--border);
+            padding: 15px 25px !important;
+            display: grid !important;
+            grid-template-columns: 1fr auto;
+            grid-template-rows: auto auto;
+            column-gap: 16px;
+            row-gap: 2px;
+            align-items: center;
+        }
+        .chart-fullscreen .card-title {
+            grid-column: 1;
+            grid-row: 1;
+            font-size: 1.1rem !important;
+            color: var(--primary) !important;
+            margin: 0;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .chart-fullscreen .card-subtitle {
+            grid-column: 1;
+            grid-row: 2;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Close ✕ — identical look to the file modal */
+        .chart-fullscreen .expand-btn {
+            grid-column: 2;
+            grid-row: 1 / span 2;
+            align-self: center;
+            position: static !important;
+            top: auto !important;
+            right: auto !important;
+            margin-left: auto !important;
+            background: none !important;
+            border: none !important;
+            color: var(--text-muted) !important;
+            font-size: 1.5rem !important;
+            cursor: pointer !important;
+            transition: color 0.2s !important;
+            padding: 0 4px !important;
+            line-height: 1 !important;
+            flex-shrink: 0;
+            width: auto !important;
+            height: auto !important;
+        }
+        .chart-fullscreen .expand-btn:hover {
+            color: var(--text-main) !important;
+            background: transparent !important;
+        }
+        .chart-fullscreen .chart-wrapper {
+            height: 320px;
+            min-height: 220px;
+            max-height: 70vh;
+            resize: vertical;
+            overflow: hidden;
+            padding: 18px 28px 22px 28px;
+            position: relative;
+        }
+        /* Visible resize gripper, bottom-right of the wrapper */
+        .chart-fullscreen .chart-wrapper::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            width: 16px;
+            height: 16px;
+            background-image:
+                linear-gradient(135deg, transparent 0%, transparent 35%, var(--text-muted) 35%, var(--text-muted) 45%, transparent 45%, transparent 60%, var(--text-muted) 60%, var(--text-muted) 70%, transparent 70%);
+            opacity: 0.7;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .chart-fullscreen .chart-wrapper canvas {
+            /* canvas stops short of the resize handle so it's grabbable */
+            max-height: calc(100% - 8px) !important;
+        }
+        .chart-fullscreen .info-bar {
+            border-bottom: 1px solid var(--border);
+            padding: 0 28px;
+            justify-content: flex-start;
+        }
+        .chart-fullscreen .info-pill-slot {
+            left: 28px;
+            max-width: 200px;
+        }
+        .chart-fullscreen .info-details {
+            text-align: left;
+            margin-left: 140px;
+            max-width: calc(100% - 160px);
+        }
+        .chart-fullscreen .fullscreen-table-container {
+            overflow: visible; /* whole modal scrolls now, not just the table */
+        }
+
+        /* Library Explorer tables — base style.css uses overflow:hidden which clips the top border on Windows/some zooms */
+        .table-wrapper {
+            border: 1px solid var(--border);
+            box-sizing: border-box;
+        }
+
+        /* Anchor offsets so fixed top gavel doesn't cover jump targets */
+        #libraryExplorer,
+        #system-health {
+            scroll-margin-top: 112px;
+        }
+
+        /* Collapsible section header — works as an h2 substitute */
+        .collapsible-section-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            margin: 50px 0 0 0;
+            padding: 16px 14px 14px 0;
+            background: transparent;
+            border: none;
+            color: var(--primary);
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: inherit;
+            text-align: left;
+            cursor: pointer;
+            transition: color 0.18s ease;
+        }
+        .collapsible-section-header:hover {
+            color: var(--text-main);
+        }
+        .collapse-chevron {
+            margin-left: auto;
+            color: var(--text-muted);
+            transition: transform 0.25s ease, color 0.18s ease;
+            display: inline-flex;
+            align-items: center;
+        }
+        .collapsible-section-header[aria-expanded="true"] .collapse-chevron {
+            transform: rotate(180deg);
+            color: var(--primary);
+        }
+        .collapsible-section-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.32s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+            opacity: 0;
+            padding-top: 0;
+        }
+        .collapsible-section-body.expanded {
+            max-height: 2000px;  /* generous cap for the panel inside */
+            opacity: 1;
+            padding-top: 24px;
+        }
+
+        /* Page footer — soft info bar at very bottom */
+        .page-footer {
+            margin-top: 56px;
+            padding: 16px 0 24px 0;
+            border-top: 1px solid var(--border);
+        }
+        .page-footer-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+            font-size: 0.74rem;
+            color: var(--text-muted);
+        }
+        .page-footer-section {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .page-footer-section-right { justify-content: flex-end; }
+        .page-footer-glyph {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-right: 2px;
+        }
+        .page-footer-sep {
+            color: var(--text-muted);
+            opacity: 0.5;
+            user-select: none;
+        }
+        .page-footer-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+        .page-footer-link:hover {
+            color: var(--primary);
+        }
+        .page-footer-ai-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 9px;
+            border-radius: 999px;
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+            border: 1px solid rgba(56, 189, 248, 0.28);
+            text-decoration: none;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        }
+        .page-footer-ai-tag:hover {
+            background: rgba(56, 189, 248, 0.18);
+            border-color: var(--primary);
+            transform: translateY(-1px);
+        }
+        .page-footer-brand-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            padding: 2px 6px;
+            margin-left: -6px;
+            border-radius: 6px;
+            color: inherit;
+            font: inherit;
+            cursor: pointer;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .page-footer-brand-btn:hover {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .floating-theme-dock {
+            position: fixed;
+            right: 18px;
+            bottom: 14px;
+            z-index: 9500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px;
+            border-radius: 999px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+            backdrop-filter: blur(12px);
+        }
+        .floating-theme-dock .menu-segment-btn {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .floating-baseline-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .floating-baseline-btn:hover {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.12);
+        }
+
+        /* (i) info modals (guide, changelog) must stack above ALL other modals — including the file modal */
+        #guideModal,
+        #changelogModal {
+            z-index: 99999999 !important;
+        }
+        #guideModal .modal-wrapper,
+        #changelogModal .modal-wrapper {
+            z-index: 100000000 !important;
+        }
+
+        /* Hex/history menus — cap height so they never escape the viewport */
+        .settings-menu {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        /* Hex menu is positioned dynamically by JS — fixed when portaled to body. */
+        #hexMenu, #historyMenu {
+            position: absolute;
+            display: none;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+            padding: 10px 0;
+            min-width: 250px;
+            flex-direction: column;
+            z-index: 99999 !important;
+        }
+        #hexMenu.show, #historyMenu.show {
+            display: flex !important;
+        }
+        #hexMenu.show {
+            animation: gavelDrop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        @keyframes gavelDrop {
+            0%   { transform: translateY(-8px) scale(0.96); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+
+        /* Documentation icon button next to dashboard title */
+        .docs-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            margin-left: 12px;
+            vertical-align: middle;
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
+        }
+        .docs-icon-btn svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+        }
+        .docs-icon-btn:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .docs-icon-btn:active { transform: scale(0.94); }
+
+        /* TOP GAVEL — always visible, unified control bar */
+        .top-gavel {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            height: 56px !important;
+            min-height: 56px !important;
+            max-height: 56px !important;
+            margin: 0 !important;
+            padding: 0 18px !important;
+            background: var(--gavel-bg) !important;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border) !important;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.22);
+            z-index: 9990 !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 12px;
+            box-sizing: border-box !important;
+            transform: translateY(-100%);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.22s ease-out, opacity 0.22s ease-out, background 0.25s ease;
+        }
+        body.has-floating-gavel .top-gavel {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        /* The brand text on the left replaces the bare ⬢ glyph when floating */
+        .gavel-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--text-main);
+            user-select: none;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            background: transparent;
+            transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+            font-family: inherit;
+        }
+        .gavel-brand:hover {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+            border-color: var(--border);
+        }
+        .gavel-brand .gavel-brand-glyph {
+            font-size: 1.15rem;
+            line-height: 1;
+        }
+        .top-gavel.flash #globalFilterBar {
+            box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.35);
+            border-radius: 999px;
+        }
+        .gavel-cluster {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .gavel-cluster.left {
+            flex: 0 0 auto;
+        }
+        .gavel-cluster.center {
+            flex: 1 1 auto;
+            min-width: 0;
+            justify-content: center;
+            gap: 10px;
+        }
+        .gavel-cluster.right {
+            flex: 0 0 auto;
+            margin-left: auto;
+        }
+        .gavel-icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, transform 0.12s ease;
+        }
+        .gavel-icon-btn:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+        }
+        .gavel-icon-btn:active { transform: scale(0.94); }
+        .gavel-icon-btn.hex {
+            font-size: 1.4rem;
+            line-height: 1;
+            color: var(--text-main);
+            border: 1px solid transparent;
+        }
+        .gavel-icon-btn.hex:hover {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+            border-color: var(--border);
+        }
+        /* Dynamic icon — danger styling when in clear-filters mode */
+        .gavel-icon-btn.has-filters {
+            color: #f87171;
+            border-color: #f87171;
+            background: rgba(248, 113, 113, 0.08);
+        }
+        .gavel-icon-btn.has-filters:hover {
+            color: #fff;
+            background: #f87171;
+            border-color: #f87171;
+        }
+        .gavel-badge {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: rgba(0,0,0,0.03);
+            transition: color 0.15s ease, background 0.15s ease;
+            white-space: nowrap;
+        }
+        .gavel-badge:hover {
+            color: var(--primary);
+            background: rgba(56, 189, 248, 0.08);
+        }
+
+        /* Filter bar inside the gavel */
+        #globalFilterBar.empty .gfb-empty-msg {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 0.82rem;
+        }
+        #globalFilterBar .gfb-add-btn {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: rgba(56, 189, 248, 0.12);
+            color: var(--primary);
+            border: 1px solid var(--primary);
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        #globalFilterBar .gfb-add-btn:hover {
+            background: var(--primary);
+            color: #0f172a;
+        }
+        #globalFilterBar .gfb-pills {
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            gap: 6px;
+            flex: 0 1 auto;
+            min-width: 0;
+            overflow: hidden;
+        }
+        #globalFilterBar .gfb-clear {
+            flex-shrink: 0;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 5px 12px;
+            border-radius: 999px;
+            font-size: 0.74rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }
+        #globalFilterBar .gfb-clear:hover {
+            color: #f87171;
+            border-color: #f87171;
+        }
+        #globalFilterBar .gfb-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 5px 3px 9px;
+            border-radius: 999px;
+            background: var(--bg-body);
+            border: 1px solid var(--border);
+            font-size: 0.74rem;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            flex-shrink: 0;
+            animation: gfbAdd 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        #globalFilterBar .gfb-pill .gfb-key {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        #globalFilterBar .gfb-pill .gfb-x {
+            background: rgba(0,0,0,0.06);
+            color: var(--text-muted);
+            border: none;
+            width: 17px;
+            height: 17px;
+            border-radius: 999px;
+            font-size: 11px;
+            line-height: 1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease, color 0.15s ease;
+        }
+        #globalFilterBar .gfb-pill .gfb-x:hover {
+            background: #f87171;
+            color: #fff;
+        }
+        @keyframes gfbAdd {
+            0%   { opacity: 0; transform: translateY(-3px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        /* Library button gulps when a filter is added — like a frog catching a treat */
+        @keyframes libraryGulp {
+            0%   { transform: scale(1); }
+            18%  { transform: scale(1.2) rotate(-4deg); }
+            42%  { transform: scale(0.92) rotate(3deg); }
+            70%  { transform: scale(1.06) rotate(-2deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        /* BOTTOM GAVEL — glassy notification rail */
+        .notif-rail {
+            position: fixed !important;
+            bottom: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            height: 54px !important;
+            min-height: 54px !important;
+            max-height: 54px !important;
+            margin: 0 !important;
+            background: var(--gavel-bg);
+            backdrop-filter: blur(24px) saturate(140%);
+            -webkit-backdrop-filter: blur(24px) saturate(140%);
+            border-top: 1px solid var(--border) !important;
+            z-index: 9990 !important;
+            display: none !important;
+            align-items: center !important;
+            padding: 0 14px !important;
+            gap: 14px !important;
+            box-sizing: border-box !important;
+            pointer-events: none;
+        }
+        .notif-rail.has-notif {
+            display: flex !important;
+            background: var(--gavel-bg);
+            animation: notifSlideUp 0.22s ease-out;
+        }
+        /* Dark & OLED filter gavel surfaces */
+        [data-theme="dark"] body.has-floating-gavel .filter-gavel.active,
+        [data-theme="oled"] body.has-floating-gavel .filter-gavel.active {
+            background: rgba(69, 10, 10, 0.85);
+            border-bottom: 2px solid #ef4444;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+        }
+        [data-theme="dark"] body:not(.has-floating-gavel) .filter-gavel.active,
+        [data-theme="oled"] body:not(.has-floating-gavel) .filter-gavel.active {
+            background: rgba(127, 29, 29, 0.22);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-left: 3px solid #ef4444;
+        }
+        [data-theme="dark"] .filter-gavel.active .gfb-pill,
+        [data-theme="oled"] .filter-gavel.active .gfb-pill {
+            background: var(--bg-card) !important;
+            border-color: rgba(239, 68, 68, 0.45) !important;
+            color: #fca5a5 !important;
+        }
+        [data-theme="dark"] .filter-gavel.active .gfb-pill .gfb-key,
+        [data-theme="oled"] .filter-gavel.active .gfb-pill .gfb-key,
+        [data-theme="dark"] .filter-gavel .gfb-label,
+        [data-theme="oled"] .filter-gavel .gfb-label {
+            color: #f87171 !important;
+        }
+        @keyframes notifSlideUp {
+            0%   { transform: translateY(100%); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        .notif-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.82rem;
+            color: var(--text-main);
+            opacity: 0;
+            transition: opacity 0.25s ease;
+            max-width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .notif-rail.has-notif .notif-content {
+            opacity: 1 !important;
+        }
+        .notif-pill-slot:empty {
+            display: none;
+        }
+        .notif-pill-slot .info-pill {
+            font-size: 0.7rem;
+            padding: 3px 10px;
+        }
+        .notif-text {
+            color: var(--text-main);
+            font-size: 0.82rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .notif-text.toast-info { color: var(--primary); }
+        .notif-text.toast-error { color: #f87171; font-weight: 600; }
+        .notif-text.toast-success { color: #34d399; font-weight: 600; }
+
+        /* Jump-to-Library button — appears on both top + bottom gavels at the same horizontal position */
+
+        @keyframes footerGlowAnim {
+            0% { box-shadow: 0 15px 35px rgba(0,0,0,0.1), inset 0 0 0px rgba(56, 189, 248, 0); }
+            30% { box-shadow: 0 15px 35px rgba(0,0,0,0.1), inset 0 0 40px rgba(56, 189, 248, 0.4); }
+            100% { box-shadow: 0 15px 35px rgba(0,0,0,0.1), inset 0 0 0px rgba(56, 189, 248, 0); }
+        }
+        .footer-pulse { animation: footerGlowAnim 1.2s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+        .kpi-bg-grid {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            overflow: hidden; opacity: 0.08; pointer-events: none;
+            background-image: linear-gradient(rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.2) 1px, transparent 1px);
+            background-size: 20px 20px;
+            animation: gridPulse 4s infinite alternate;
+            z-index: 0;
+        }
+        @keyframes gridPulse { 0% { transform: scale(1); opacity: 0.05; } 100% { transform: scale(1.05); opacity: 0.1; } }
+        .kpi-card { position: relative; }
+        .kpi-label, .kpi-value, .kpi-meta { position: relative; z-index: 10; }
+    </style>
+</head>
+<body>
+
+    <!-- TOP GAVEL: ⬢ baseline reset (left) | search (center) | menu (right) -->
+    <div class="top-gavel" id="topGavel">
+        <!-- LEFT: brand button -> reset to baseline -->
+        <div class="gavel-cluster left" style="position:relative;">
+            <button id="hexBtn" class="gavel-brand" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)" aria-label="Reset to baseline">
+                <span class="gavel-brand-glyph">⬢</span>
+                <span>NNUVA</span>
+            </button>
+        </div>
+
+        <!-- CENTER: search bar -->
+        <div class="gavel-cluster center">
+            <div class="gavel-search-wrap">
+                <span class="gavel-search-icon">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                </span>
+                <input type="text" id="globalSearch" class="gavel-search" placeholder="Search" autocomplete="off" spellcheck="false">
+                <button id="searchClearBtn" class="gavel-search-clear" onclick="clearSearch()" title="Clear search" style="display:none;">
+                    <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                <button id="searchGoBtn" class="gavel-search-action" onclick="jumpToLibrary()" title="Jump to Library Explorer (Enter)" aria-label="Jump to Library Explorer">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M3 7h18"></path><path d="M3 12h18"></path><path d="M3 17h12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- RIGHT: meatball menu — quick actions, version, db info, docs & changelog -->
+        <div class="gavel-cluster right meatball-wrap">
+            <button id="meatballBtn" class="gavel-icon-btn" onclick="toggleMeatballMenu(event)" title="Menu &amp; System Info" aria-label="Menu &amp; System Info">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
+            </button>
+            <div class="meatball-menu" id="meatballMenu">
+                <div class="mb-section-label">Quick Actions</div>
+                <button class="mb-action" onclick="resetToBaseline(event)">
+                    <span style="color:var(--primary);font-size:0.9rem;line-height:1;">⬢</span>
+                    <span>Reset to Baseline</span>
+                </button>
+                <button class="mb-action" onclick="openFilterModal(); document.getElementById('meatballMenu').classList.remove('show');">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    <span>Add Filter</span>
+                </button>
+                <button class="mb-action" id="qaExportBtn">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <span>Download CSV</span>
+                </button>
+                <button class="mb-action" id="qaClearBtn" onclick="clearAllFilters(event)">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    <span>Clear All Filters</span>
+                </button>
+                <div class="mb-divider"></div>
+                <div class="mb-section-label">Version</div>
+                <div class="mb-row"><span class="mb-key">Report</span><span class="mb-val">v__VERSION__</span></div>
+                <div class="mb-row"><span class="mb-key">Cache parser</span><span class="mb-val">v__NNUVA_CACHE_VERSION__</span></div>
+                <div class="mb-divider"></div>
+                <div class="mb-section-label">Main cache</div>
+                <div class="mb-row"><span class="mb-key">Size</span><span class="mb-val">__CACHE_SIZE_MB__ MB</span></div>
+                <div class="mb-row"><span class="mb-key">Last scan</span><span class="mb-val">__CACHE_MTIME__</span></div>
+                <div class="mb-divider"></div>
+                <div class="mb-section-label">History ledger</div>
+                <div class="mb-row"><span class="mb-key">Entries</span><span class="mb-val">__HIST_ENTRIES__ days</span></div>
+                <div class="mb-row"><span class="mb-key">Size</span><span class="mb-val">__HIST_SIZE_KB__ KB</span></div>
+                <div class="mb-row"><span class="mb-key">Last update</span><span class="mb-val">__HIST_MTIME__</span></div>
+                <div class="mb-divider"></div>
+                <button class="mb-action" id="menuGuideBtn" onclick="openGuideModal('intro'); document.getElementById('meatballMenu').classList.remove('show');">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    <span>Documentation &amp; Guides</span>
+                </button>
+                <button class="mb-action" onclick="jumpToSystemHealth()">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                    <span>Open System &amp; Database Health</span>
+                </button>
+                <button class="mb-action" id="meatballChangelogBtn">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    <span>View Changelog</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function renderCrash(title, message, source, lineno, colno, errorStack) {
+            const errDiv = document.createElement('div');
+            errDiv.style.cssText = 'position:fixed;top:10%;left:50%;transform:translateX(-50%);width:90%;max-width:700px;max-height:80vh;background:#0f172a;border:2px solid #ef4444;color:#f8fafc;z-index:99999999;font-family:monospace;font-size:13px;box-shadow:0 10px 40px rgba(0,0,0,0.8);border-radius:8px;display:flex;flex-direction:column;';
+
+            // Plain-text report for clipboard — markdown-friendly so it pastes well anywhere
+            const reportText =
+                '**' + title + '**\n' +
+                'Location: ' + (source || 'Unknown') + ' Line ' + lineno + ':' + colno + '\n' +
+                'User Agent: ' + navigator.userAgent + '\n' +
+                'Time: ' + new Date().toISOString() + '\n\n' +
+                'Message:\n' + (message || '(none)') + '\n\n' +
+                'Stack:\n```\n' + (errorStack || 'No stack trace.') + '\n```\n';
+
+            errDiv.innerHTML = `
+                <div style="background:#ef4444;color:white;padding:12px 20px;font-weight:bold;display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                    <span>${title}</span>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button class="crash-copy-btn" type="button" title="Copy full error report" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.4);color:#fff;font:inherit;font-size:12px;font-weight:600;padding:5px 11px;border-radius:5px;cursor:pointer;">
+                            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            <span class="crash-copy-label">Copy report</span>
+                        </button>
+                        <button onclick="this.closest('div[style*=position]').remove()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer;">✕</button>
+                    </div>
+                </div>
+                <div style="padding:20px;overflow-y:auto;">
+                    <div style="margin-bottom:10px;"><b>Location:</b> ${source || 'Unknown'} Line ${lineno}:${colno}</div>
+                    <div style="background:#1e293b;padding:15px;border-left:4px solid #ef4444;margin-bottom:20px;">${message}</div>
+                    <pre style="background:#020617;color:#34d399;padding:15px;overflow-x:auto;">${errorStack || 'No stack trace.'}</pre>
+                </div>
+            `;
+
+            // Wire copy button (clipboard API + textarea fallback)
+            const copyBtn = errDiv.querySelector('.crash-copy-btn');
+            const labelSpan = errDiv.querySelector('.crash-copy-label');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', function() {
+                    const flash = (ok) => {
+                        if (!labelSpan) return;
+                        const original = 'Copy report';
+                        labelSpan.textContent = ok ? 'Copied ✓' : 'Failed';
+                        copyBtn.style.background = ok ? 'rgba(52,211,153,0.30)' : 'rgba(255,255,255,0.18)';
+                        setTimeout(() => {
+                            labelSpan.textContent = original;
+                            copyBtn.style.background = 'rgba(255,255,255,0.18)';
+                        }, 1400);
+                    };
+                    const fallback = () => {
+                        const ta = document.createElement('textarea');
+                        ta.value = reportText;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        let ok = false;
+                        try { ok = document.execCommand('copy'); } catch (_) {}
+                        document.body.removeChild(ta);
+                        return ok;
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(reportText)
+                            .then(() => flash(true))
+                            .catch(() => flash(fallback()));
+                    } else {
+                        flash(fallback());
+                    }
+                });
+            }
+
+            document.body.appendChild(errDiv);
+        }
+        window.onerror = (m,s,l,c,e) => {
+            // Suppress benign ResizeObserver loop warning — non-fatal, fired when a resize
+            // callback triggers another layout. We already rAF-defer Chart.js resizes; this
+            // catches any residual noise from third-party code.
+            if (typeof m === 'string' && m.indexOf('ResizeObserver loop') !== -1) return true;
+            renderCrash('CRITICAL SYSTEM HALT', m, s, l, c, e?.stack);
+        };
+        window.addEventListener("unhandledrejection", (e) => renderCrash('UNHANDLED PROMISE REJECTION', e.reason?.message || e.reason, 'Promise', 0, 0, e.reason?.stack));
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous"></script>
+    
+    <script type="application/base64" id="historyData">__JSON_HISTORY_B64__</script>
+    <script type="application/base64" id="filesData">__JSON_FILES_B64__</script>
+
+    <div class="container">
+
+        <div class="header-section" style="margin-bottom: 30px;">
+            <div class="hero-bar">
+                <button id="heroTitle" class="hero-title-btn" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)" aria-label="Reset to baseline">
+                    <h1 style="margin: 0;">
+                        <span style="color: var(--brand-text); font-weight: bold;">⬢ NNUVA</span>
+                        <span style="color: var(--primary); font-weight: normal;">Library Dashboard</span>
+                    </h1>
+                </button>
+                <div class="hero-search-wrap">
+                    <span class="gavel-search-icon">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </span>
+                    <input type="text" id="heroSearch" class="gavel-search" placeholder="Search" autocomplete="off" spellcheck="false">
+                    <button id="heroSearchClearBtn" class="gavel-search-clear" onclick="clearSearch()" title="Clear search" style="display:none;">
+                        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                <button id="heroKebabBtn" class="hero-icon-btn" onclick="toggleMeatballMenu(event)" title="Menu &amp; System Info" aria-label="Menu &amp; System Info" style="margin-left: 0;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- FILTER GAVEL: only visible when filter pills are active. -->
+        <!-- Lives in flow when not floating; JS portals it to <body> when floating. -->
+        <div class="filter-gavel" id="filterGavel">
+            <span class="gfb-label">Filters</span>
+            <button class="gfb-add" id="gfbAddBtn" onclick="openFilterModal()" title="Add filter" aria-label="Add filter">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
+            <div id="globalFilterBar" class="empty" style="display:flex;align-items:center;gap:8px;flex:1 1 auto;min-width:0;overflow:hidden;">
+                <div id="gfbPills" style="display:flex;flex-wrap:nowrap;align-items:center;gap:6px;flex:0 1 auto;min-width:0;overflow:hidden;"></div>
+                <button class="gfb-clear" id="gfbClearBtn" onclick="clearAllFilters(event)" style="display:none;align-items:center;gap:5px;">
+                    <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" fill="none" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    Reset
+                </button>
+            </div>
+            <button class="gfb-dismiss" id="gfbDismissBtn" onclick="clearAllFilters(event)" title="Clear all filters" aria-label="Clear all filters">
+                <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" fill="none" stroke-width="2.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <div class="kpi-layout">
+            <div class="kpi-group">
+                <div class="kpi-card blue" onclick="openKpiModal('files')" style="overflow: hidden; position: relative;">
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60%; opacity: 0.2; pointer-events: none;"><canvas id="miniSparkline-files"></canvas></div>
+                    <div class="kpi-label"><span>Total Files</span></div>
+                    <div class="kpi-value" id="kpi-files">Loading...</div>
+                    <div class="kpi-meta" id="kpi-meta-files">&nbsp;</div>
+                </div>
+                <div class="kpi-card blue" onclick="openKpiModal('storage')" style="overflow: hidden; position: relative;">
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 60%; opacity: 0.2; pointer-events: none;"><canvas id="miniSparkline-storage"></canvas></div>
+                    <div class="kpi-label"><span>Total Storage</span></div>
+                    <div class="kpi-value" id="kpi-storage">Loading...</div>
+                    <div class="kpi-meta" id="kpi-meta-storage">&nbsp;</div>
+                </div>
+            </div>
+            <div class="kpi-group kpi-group-actionable">
+                <div class="kpi-card green" onclick="openKpiModal('optimal')" style="overflow: hidden; position: relative;">
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 55%; opacity: 0.22; pointer-events: none;"><canvas id="miniSparkline-optimal"></canvas></div>
+                    <div class="kpi-label"><div style="display:flex; align-items:center; gap:6px;"><span style="color: #34d399; font-size: 1rem;">⬢</span> <span>Optimal Encodes</span></div></div>
+                    <div class="kpi-value" id="kpi-optimal">Loading...</div>
+                    <div class="kpi-meta" id="kpi-meta-optimal">&nbsp;</div>
+                </div>
+                <div class="kpi-card orange" onclick="openKpiModal('upgrade')" style="overflow: hidden; position: relative;">
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 55%; opacity: 0.22; pointer-events: none;"><canvas id="miniSparkline-upgrade"></canvas></div>
+                    <div class="kpi-label"><div style="display:flex; align-items:center; gap:6px;"><span style="color: #f97316; font-size: 1rem;">⬢</span> <span>Upgrade Targets</span></div></div>
+                    <div class="kpi-value" id="kpi-upgrade">Loading...</div>
+                    <div class="kpi-meta" id="kpi-meta-upgrade">&nbsp;</div>
+                </div>
+                <div class="kpi-card magenta" onclick="openKpiModal('transcode')" style="overflow: hidden; position: relative;">
+                    <div style="position: absolute; bottom: 0; left: 0; right: 0; height: 55%; opacity: 0.22; pointer-events: none;"><canvas id="miniSparkline-transcode"></canvas></div>
+                    <div class="kpi-label"><div style="display:flex; align-items:center; gap:6px;"><span style="color: #d946ef; font-size: 1rem;">⬢</span> <span>Transcode Targets</span></div></div>
+                    <div class="kpi-value" id="kpi-transcode">Loading...</div>
+                    <div class="kpi-meta" id="kpi-meta-transcode">&nbsp;</div>
+                </div>
+                <div class="kpi-card magenta" onclick="openKpiModal('reclaimable')" style="overflow: hidden; position: relative;" title="Estimated storage that would be freed if all bloat-tier files were transcoded to HEVC">
+                    <div class="kpi-label"><div style="display:flex; align-items:center; gap:6px;"><span style="color: #d946ef; font-size: 1rem;">⬢</span> <span>Reclaimable</span></div></div>
+                    <div class="kpi-value" id="kpi-reclaimable">Loading...</div>
+                    <div class="kpi-meta" id="kpi-meta-reclaimable">&nbsp;</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header-wrap" style="margin-top: 40px;">
+            <div>
+                <h2><span style="color: #34d399;">⬢ </span>Quality & Health Breakdown</h2>
+                <span class="section-desc">Analyze the overall fidelity of your library. Click chart slices to filter the dashboard.</span>
+            </div>
+        </div>
+        <div class="resizable-row" id="healthRow">
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Quality Tier Distribution</div>
+                        <div class="card-subtitle">How files spread across NQI scores</div>
+                    </div>
+                    <div class="chart-wrapper"><canvas id="nqiChart"></canvas></div>
+                </div>
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Resolution Mix</div>
+                        <div class="card-subtitle">File count grouped by source resolution</div>
+                    </div>
+                    <div class="chart-wrapper"><canvas id="resChart"></canvas></div>
+                </div>
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Storage by Resolution</div>
+                        <div class="card-subtitle">Total footprint per resolution tier</div>
+                    </div>
+                    <div class="chart-wrapper"><canvas id="resSizeChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header-wrap" style="margin-top: 40px;">
+            <div>
+                <h2><span style="color: #38bdf8;">⬢ </span>Storage Footprint &amp; Folder Hogs</h2>
+                <span class="section-desc">See which library categories and multi-season series consume the most disk space and GB per hour. Click any bar to filter.</span>
+            </div>
+        </div>
+        <div class="resizable-row" id="storageRow">
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Storage by Category</div>
+                        <div class="card-subtitle">Total disk footprint across library folders</div>
+                    </div>
+                    <div class="chart-wrapper"><canvas id="catSizeChart"></canvas></div>
+                </div>
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Top Series &amp; Collection Hogs</div>
+                        <div class="card-subtitle">Largest multi-file shows &amp; collections by total GB</div>
+                    </div>
+                    <div class="chart-wrapper"><canvas id="seriesHogChart"></canvas></div>
+                </div>
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Storage Efficiency (GB / Hour)</div>
+                        <div class="card-subtitle">Average gigabytes consumed per hour of playback</div>
+                    </div>
+                    <div class="chart-wrapper"><canvas id="catEfficiencyChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-header-wrap" style="margin-top: 40px;">
+            <div>
+                <h2><span style="color: #818cf8;">⬢ </span>Technical Specifications</h2>
+                <span class="section-desc">Track format adoption,
+codec efficiency,
+and hardware compatibility across your media files.</span>
+            </div>
+        </div>
+        <div class="resizable-row" id="techRow">
+            <div class="chart-grid">
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Video Codecs</div>
+                        <div class="card-subtitle">Encoding format share across the library</div>
+                    </div>
+                    <div id="legend-codecChart" class="legend-bar legend-pills"></div>
+                    <div class="chart-wrapper"><canvas id="codecChart"></canvas></div>
+                </div>
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Audio Codecs</div>
+                        <div class="card-subtitle">Audio track format breakdown</div>
+                    </div>
+                    <div id="legend-audioChart" class="legend-bar legend-pills"></div>
+                    <div class="chart-wrapper"><canvas id="audioChart"></canvas></div>
+                </div>
+                <div class="chart-container">
+                    <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                    <div class="card-header">
+                        <div class="card-title">Color & HDR</div>
+                        <div class="card-subtitle">SDR vs HDR format distribution</div>
+                    </div>
+                    <div id="legend-hdrChart" class="legend-bar legend-pills"></div>
+                    <div class="chart-wrapper"><canvas id="hdrChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px;">
+            <div class="section-header-wrap">
+                <div>
+                    <h2><span style="color: #f97316;">⬢ </span>Bitrate Analysis</h2>
+                    <span class="section-desc">Examine bitrate efficiency across your library. Identify oversized encodes and outliers by file size,
+resolution,
+and distribution.</span>
+                </div>
+            </div>
+            <div class="resizable-row" id="bitrateRow">
+                <div class="chart-grid">
+                    <div class="chart-container">
+                        <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                        <div class="card-header">
+                            <div class="card-title">Bitrate vs Size</div>
+                            <div class="card-subtitle">Each point is a single file in your library</div>
+                        </div>
+                        <div class="chart-wrapper"><canvas id="bitrateScatterChart"></canvas></div>
+                    </div>
+                    <div class="chart-container">
+                        <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                        <div class="card-header">
+                            <div class="card-title">Average Bitrate by Resolution</div>
+                            <div class="card-subtitle">Mean encoding intensity per resolution tier</div>
+                        </div>
+                        <div class="chart-wrapper"><canvas id="bitrateByResChart"></canvas></div>
+                    </div>
+                    <div class="chart-container">
+                        <button class="expand-btn" onclick="toggleFullscreen(this.closest('.chart-container, .trend-container'), this)">⛶</button>
+                        <div class="card-header">
+                            <div class="card-title">Bitrate Distribution</div>
+                            <div class="card-subtitle">File count grouped into Mbps buckets</div>
+                        </div>
+                        <div class="chart-wrapper"><canvas id="bitrateHistChart"></canvas></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 50px;" id="libraryExplorer">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+                <div>
+                    <h2 style="margin:0 0 4px 0;"><span style="color: #fbbf24;">⬢ </span>Library Explorer</h2>
+                    <div class="section-desc">Deep dive into specific files based on your active filters. Click any file to open Transcode &amp; Downscale Actions and metadata details.</div>
+                </div>
+            </div>
+            
+            <div id="quickNqiFilters" style="display: flex; align-items:center; gap: 8px; margin-top: 14px; margin-bottom: 20px; flex-wrap: wrap;">
+                <button class="filter-chip-btn" style="border-radius: 999px;" onclick="triggerKpiFilter('NQI',
+['6',
+'7'],
+'Overkill')">NQI 6-7 (Overkill)</button>
+                <button class="filter-chip-btn" style="border-radius: 999px;" onclick="triggerKpiFilter('NQI',
+['4',
+'5'],
+'Optimal')">NQI 4-5 (Optimal)</button>
+                <button class="filter-chip-btn" style="border-radius: 999px;" onclick="triggerKpiFilter('NQI',
+['3'],
+'Acceptable')">NQI 3 (Acceptable)</button>
+                <button class="filter-chip-btn" style="border-radius: 999px;" onclick="triggerKpiFilter('NQI',
+['1',
+'2'],
+'Upgrade')">NQI 1-2 (Upgrade)</button>
+                <button class="filter-chip-btn" style="border-radius: 999px; border-color: #f87171; color: #f87171;" onclick="triggerKpiFilter('reset')">Clear NQI Filter</button>
+                <!-- Inline search — synced with top bar -->
+                <div class="gavel-search-wrap library-search-wrap" style="margin-left:auto; flex-shrink:0; min-width:200px; max-width:300px;">
+                    <span class="gavel-search-icon">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </span>
+                    <input type="text" id="librarySearch" class="gavel-search" placeholder="Search" autocomplete="off" spellcheck="false">
+                    <button id="librarySearchClearBtn" class="gavel-search-clear" onclick="clearSearch()" title="Clear search" style="display:none;">
+                        <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="filteredViewContainer" style="display: none;">
+                <h3 style="color: #2dd4bf; margin-top: 15px; margin-bottom: 15px;"><span style="color: #2dd4bf;">⬢ </span>Filtered Results</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th class="sortable-th" data-sort-key="file" data-table="filtered" onclick="toggleTableSort('filtered',
+'file')"><span class="sortable-th-inner"><span>Filename</span><span class="sort-indicator" data-indicator-table="filtered" data-indicator-key="file"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="RES" data-table="filtered" onclick="toggleTableSort('filtered',
+'RES')"><span class="sortable-th-inner"><span>Resolution</span><span class="sort-indicator" data-indicator-table="filtered" data-indicator-key="RES"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="VIDEO" data-table="filtered" onclick="toggleTableSort('filtered',
+'VIDEO')"><span class="sortable-th-inner"><span>Video</span><span class="sort-indicator" data-indicator-table="filtered" data-indicator-key="VIDEO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="HDR" data-table="filtered" onclick="toggleTableSort('filtered',
+'HDR')"><span class="sortable-th-inner"><span>HDR/SDR</span><span class="sort-indicator" data-indicator-table="filtered" data-indicator-key="HDR"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="AUDIO" data-table="filtered" onclick="toggleTableSort('filtered',
+'AUDIO')"><span class="sortable-th-inner"><span>Audio</span><span class="sort-indicator" data-indicator-table="filtered" data-indicator-key="AUDIO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="NQI" data-table="filtered" onclick="toggleTableSort('filtered',
+'NQI')"><span class="sortable-th-inner"><span>NQI</span><span class="sort-indicator" data-indicator-table="filtered" data-indicator-key="NQI"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th text-right" data-sort-key="size_bytes" data-table="filtered" onclick="toggleTableSort('filtered',
+'size_bytes')"><span class="sortable-th-inner"><span>Size</span><span class="sort-indicator" data-indicator-table="filtered" data-indicator-key="size_bytes"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th></tr></thead>
+                        <tbody id="table-filtered"></tbody>
+                    </table>
+                    <div class="table-footer">
+                        <span class="table-footer-text" id="footer-text-filtered">Showing 5</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="table-more-btn" id="less-btn-filtered" onclick="loadLess('filtered')" style="display: none;">Less</button>
+                            <button class="table-more-btn" id="more-btn-filtered" onclick="loadMore('filtered')">More</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="defaultViewContainer">
+                <h3 style="color: #d946ef; margin-top: 15px; margin-bottom: 15px;"><span style="color: #d946ef;">⬢ </span>High Priority: Transcode Candidates (8K Ready / Overkill)</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th class="sortable-th" data-sort-key="file" data-table="transcode" onclick="toggleTableSort('transcode',
+'file')"><span class="sortable-th-inner"><span>Filename</span><span class="sort-indicator" data-indicator-table="transcode" data-indicator-key="file"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="RES" data-table="transcode" onclick="toggleTableSort('transcode',
+'RES')"><span class="sortable-th-inner"><span>Resolution</span><span class="sort-indicator" data-indicator-table="transcode" data-indicator-key="RES"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="VIDEO" data-table="transcode" onclick="toggleTableSort('transcode',
+'VIDEO')"><span class="sortable-th-inner"><span>Video</span><span class="sort-indicator" data-indicator-table="transcode" data-indicator-key="VIDEO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="HDR" data-table="transcode" onclick="toggleTableSort('transcode',
+'HDR')"><span class="sortable-th-inner"><span>HDR/SDR</span><span class="sort-indicator" data-indicator-table="transcode" data-indicator-key="HDR"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="AUDIO" data-table="transcode" onclick="toggleTableSort('transcode',
+'AUDIO')"><span class="sortable-th-inner"><span>Audio</span><span class="sort-indicator" data-indicator-table="transcode" data-indicator-key="AUDIO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="NQI" data-table="transcode" onclick="toggleTableSort('transcode',
+'NQI')"><span class="sortable-th-inner"><span>NQI</span><span class="sort-indicator" data-indicator-table="transcode" data-indicator-key="NQI"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th text-right" data-sort-key="size_bytes" data-table="transcode" onclick="toggleTableSort('transcode',
+'size_bytes')"><span class="sortable-th-inner"><span>Size</span><span class="sort-indicator" data-indicator-table="transcode" data-indicator-key="size_bytes"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th></tr></thead>
+                        <tbody id="table-transcode"></tbody>
+                    </table>
+                    <div class="table-footer">
+                        <span class="table-footer-text" id="footer-text-transcode">Showing 5</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="table-more-btn" id="less-btn-transcode" onclick="loadLess('transcode')" style="display: none;">Less</button>
+                            <button class="table-more-btn" id="more-btn-transcode" onclick="loadMore('transcode')">More</button>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="color: #f87171; margin-top: 30px; margin-bottom: 15px;"><span style="color: #f87171;">⬢ </span>High Priority: Upgrade Candidates (VHS / Barely Visible)</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th class="sortable-th" data-sort-key="file" data-table="upgrade" onclick="toggleTableSort('upgrade',
+'file')"><span class="sortable-th-inner"><span>Filename</span><span class="sort-indicator" data-indicator-table="upgrade" data-indicator-key="file"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="RES" data-table="upgrade" onclick="toggleTableSort('upgrade',
+'RES')"><span class="sortable-th-inner"><span>Resolution</span><span class="sort-indicator" data-indicator-table="upgrade" data-indicator-key="RES"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="VIDEO" data-table="upgrade" onclick="toggleTableSort('upgrade',
+'VIDEO')"><span class="sortable-th-inner"><span>Video</span><span class="sort-indicator" data-indicator-table="upgrade" data-indicator-key="VIDEO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="HDR" data-table="upgrade" onclick="toggleTableSort('upgrade',
+'HDR')"><span class="sortable-th-inner"><span>HDR/SDR</span><span class="sort-indicator" data-indicator-table="upgrade" data-indicator-key="HDR"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="AUDIO" data-table="upgrade" onclick="toggleTableSort('upgrade',
+'AUDIO')"><span class="sortable-th-inner"><span>Audio</span><span class="sort-indicator" data-indicator-table="upgrade" data-indicator-key="AUDIO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="NQI" data-table="upgrade" onclick="toggleTableSort('upgrade',
+'NQI')"><span class="sortable-th-inner"><span>NQI</span><span class="sort-indicator" data-indicator-table="upgrade" data-indicator-key="NQI"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th text-right" data-sort-key="size_bytes" data-table="upgrade" onclick="toggleTableSort('upgrade',
+'size_bytes')"><span class="sortable-th-inner"><span>Size</span><span class="sort-indicator" data-indicator-table="upgrade" data-indicator-key="size_bytes"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th></tr></thead>
+                        <tbody id="table-upgrade"></tbody>
+                    </table>
+                    <div class="table-footer">
+                        <span class="table-footer-text" id="footer-text-upgrade">Showing 5</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="table-more-btn" id="less-btn-upgrade" onclick="loadLess('upgrade')" style="display: none;">Less</button>
+                            <button class="table-more-btn" id="more-btn-upgrade" onclick="loadMore('upgrade')">More</button>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="color: #38bdf8; margin-top: 30px; margin-bottom: 15px;"><span style="color: #38bdf8;">⬢ </span>Folder Hogs: Top Largest Series &amp; Collections</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr>
+                            <th class="sortable-th" data-sort-key="show" data-table="series" onclick="toggleSeriesSort('show')"><span class="sortable-th-inner"><span>Series / Collection</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="show"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                            <th class="sortable-th" data-sort-key="cat" data-table="series" onclick="toggleSeriesSort('cat')"><span class="sortable-th-inner"><span>Category</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="cat"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                            <th class="sortable-th" data-sort-key="count" data-table="series" onclick="toggleSeriesSort('count')"><span class="sortable-th-inner"><span>Files</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="count"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                            <th class="sortable-th" data-sort-key="dur_sec" data-table="series" onclick="toggleSeriesSort('dur_sec')"><span class="sortable-th-inner"><span>Runtime</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="dur_sec"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                            <th class="sortable-th" data-sort-key="gb_hr" data-table="series" onclick="toggleSeriesSort('gb_hr')"><span class="sortable-th-inner"><span>Efficiency</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="gb_hr"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                            <th class="sortable-th" data-sort-key="avg_nqi" data-table="series" onclick="toggleSeriesSort('avg_nqi')"><span class="sortable-th-inner"><span>Avg NQI</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="avg_nqi"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                            <th class="sortable-th" data-sort-key="reclaim_bytes" data-table="series" onclick="toggleSeriesSort('reclaim_bytes')"><span class="sortable-th-inner"><span>Reclaimable</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="reclaim_bytes"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                            <th class="sortable-th text-right" data-sort-key="bytes" data-table="series" onclick="toggleSeriesSort('bytes')"><span class="sortable-th-inner"><span>Total Size</span><span class="sort-indicator" data-indicator-table="series" data-indicator-key="bytes"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th>
+                        </tr></thead>
+                        <tbody id="table-series"></tbody>
+                    </table>
+                    <div class="table-footer">
+                        <span class="table-footer-text" id="footer-text-series">Showing 5</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="table-more-btn" id="less-btn-series" onclick="loadLess('series')" style="display: none;">Less</button>
+                            <button class="table-more-btn" id="more-btn-series" onclick="loadMore('series')">More</button>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 style="color: var(--primary); margin-top: 30px; margin-bottom: 15px;"><span style="color: var(--primary);">⬢ </span>Storage Hogs: Top Largest Files</h3>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th class="sortable-th" data-sort-key="file" data-table="largest" onclick="toggleTableSort('largest',
+'file')"><span class="sortable-th-inner"><span>Filename</span><span class="sort-indicator" data-indicator-table="largest" data-indicator-key="file"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="RES" data-table="largest" onclick="toggleTableSort('largest',
+'RES')"><span class="sortable-th-inner"><span>Resolution</span><span class="sort-indicator" data-indicator-table="largest" data-indicator-key="RES"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="VIDEO" data-table="largest" onclick="toggleTableSort('largest',
+'VIDEO')"><span class="sortable-th-inner"><span>Video</span><span class="sort-indicator" data-indicator-table="largest" data-indicator-key="VIDEO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="HDR" data-table="largest" onclick="toggleTableSort('largest',
+'HDR')"><span class="sortable-th-inner"><span>HDR/SDR</span><span class="sort-indicator" data-indicator-table="largest" data-indicator-key="HDR"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="AUDIO" data-table="largest" onclick="toggleTableSort('largest',
+'AUDIO')"><span class="sortable-th-inner"><span>Audio</span><span class="sort-indicator" data-indicator-table="largest" data-indicator-key="AUDIO"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th" data-sort-key="NQI" data-table="largest" onclick="toggleTableSort('largest',
+'NQI')"><span class="sortable-th-inner"><span>NQI</span><span class="sort-indicator" data-indicator-table="largest" data-indicator-key="NQI"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th><th class="sortable-th text-right" data-sort-key="size_bytes" data-table="largest" onclick="toggleTableSort('largest',
+'size_bytes')"><span class="sortable-th-inner"><span>Size</span><span class="sort-indicator" data-indicator-table="largest" data-indicator-key="size_bytes"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M7 10l5-5 5 5z" opacity="0.35"/><path d="M7 14l5 5 5-5z" opacity="0.35"/></svg></span></span></th></tr></thead>
+                        <tbody id="table-largest"></tbody>
+                    </table>
+                    <div class="table-footer">
+                        <span class="table-footer-text" id="footer-text-largest">Showing 5</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="table-more-btn" id="less-btn-largest" onclick="loadLess('largest')" style="display: none;">Less</button>
+                            <button class="table-more-btn" id="more-btn-largest" onclick="loadMore('largest')">More</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button id="system-health" class="collapsible-section-header" onclick="toggleSysHealth()" aria-expanded="false">
+            <span style="color: var(--text-muted);">⬢ </span>System &amp; Database Health
+            <span class="collapse-chevron" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+        </button>
+        <div class="collapsible-section-body" id="sysHealthBody">
+            <div class="action-section" id="sysHealthPanel" style="margin-bottom: 20px;">
+                <div class="db-grid">
+                    <div class="db-panel">
+                        <h4 style="margin-top: 0; color: var(--primary);">Main Cache (ffprobe_cache.json)</h4>
+                        <p><strong>Path:</strong> ~/.nnuva/ffprobe_cache.json</p>
+                        <p><strong>Parser Version:</strong> v__NNUVA_CACHE_VERSION__</p>
+                        <p><strong>Size:</strong> __CACHE_SIZE_MB__ MB</p>
+                        <p><strong>Last Scan:</strong> __CACHE_MTIME__</p>
+                    </div>
+                    <div class="db-panel">
+                        <h4 style="margin-top: 0; color: var(--primary);">History Ledger (nnuva.db)</h4>
+                        <p><strong>Path:</strong> ~/.nnuva/nnuva.db</p>
+                        <p><strong>Entries:</strong> __HIST_ENTRIES__ Days</p>
+                        <p><strong>Size:</strong> __HIST_SIZE_KB__ KB</p>
+                        <p><strong>Last Updated:</strong> __HIST_MTIME__</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="toastContainer"></div>
+
+        <footer class="page-footer" style="padding-bottom: 56px;">
+            <div class="page-footer-inner">
+                <span class="page-footer-section">
+                    <button type="button" class="page-footer-brand-btn" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)">
+                        <span class="page-footer-glyph" style="color:var(--primary);">⬢</span>
+                        <span style="font-weight:600;color:var(--text-main);">NNUVA Report</span>
+                        <span class="page-footer-sep">·</span>
+                        <span>v__VERSION__</span>
+                        <span class="page-footer-sep">·</span>
+                        <span>cache parser v__NNUVA_CACHE_VERSION__</span>
+                    </button>
+                    <span class="page-footer-sep">·</span>
+                    <a href="https://github.com/hu5h55" target="_blank" rel="noopener noreferrer" class="page-footer-ai-tag" title="Visit our GitHub profile (github.com/hu5h55)">✦ AI-Generated ↗</a>
+                </span>
+                <span class="page-footer-section page-footer-section-right">
+                    <a href="https://github.com/hu5h55/nnuva" target="_blank" rel="noopener noreferrer" class="page-footer-link" title="Core CLI &amp; Analyzer Repository (hu5h55/nnuva)">
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.7.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.3v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
+                        hu5h55/nnuva
+                    </a>
+                    <span class="page-footer-sep">·</span>
+                    <a href="https://github.com/hu5h55/nnuva-report" target="_blank" rel="noopener noreferrer" class="page-footer-link" title="Dashboard &amp; Report Engine Repository (hu5h55/nnuva-report)">
+                        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.7.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.3v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
+                        hu5h55/nnuva-report
+                    </a>
+                    <span class="page-footer-sep">·</span>
+                    <a href="https://github.com/hu5h55/nnuva#readme" target="_blank" rel="noopener noreferrer" class="page-footer-link">Docs</a>
+                    <span class="page-footer-sep">·</span>
+                    <a href="https://github.com/hu5h55/nnuva-report/issues" target="_blank" rel="noopener noreferrer" class="page-footer-link">Issues</a>
+                    <span class="page-footer-sep">·</span>
+                    <div class="menu-segment" style="display:inline-flex;">
+                        <button type="button" class="menu-segment-btn" data-theme-opt="light" onclick="setTheme('light')">Light</button>
+                        <button type="button" class="menu-segment-btn" data-theme-opt="dark" onclick="setTheme('dark')">Dark</button>
+                        <button type="button" class="menu-segment-btn" data-theme-opt="oled" onclick="setTheme('oled')">OLED</button>
+                    </div>
+                </span>
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- FLOATING BOTTOM-RIGHT THEME SWITCH & BASELINE RESET -->
+    <div class="floating-theme-dock" id="floatingThemeDock">
+        <button type="button" class="menu-segment-btn" data-theme-opt="light" onclick="setTheme('light')" title="Light mode">Light</button>
+        <button type="button" class="menu-segment-btn" data-theme-opt="dark" onclick="setTheme('dark')" title="Dark slate mode">Dark</button>
+        <button type="button" class="menu-segment-btn" data-theme-opt="oled" onclick="setTheme('oled')" title="OLED pitch-black mode">OLED</button>
+        <button type="button" class="floating-baseline-btn" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)" aria-label="Reset to baseline">↑</button>
+    </div>
+
+    <!-- BOTTOM RAIL — hover notifications only -->
+    <div class="notif-rail" id="notifRail">
+        <div class="notif-content" id="notifContent" style="flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:center;gap:10px;font-size:0.82rem;opacity:0;transition:opacity 0.25s ease;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;">
+            <span class="notif-pill-slot" id="notifPill"></span>
+            <span class="notif-text" id="notifText" style="overflow:hidden;text-overflow:ellipsis;min-width:0;"></span>
+        </div>
+    </div>
+    <div id="fsBackdrop" onclick="closeExpandedChart()"></div>
+
+    <div id="fileModalBackdrop" class="modal-overlay" onclick="closeFileModal()"></div>
+    <div id="fileModal" class="modal-wrapper" style="display: none; max-width: 1280px;">
+        <div id="fileModalHeader" class="modal-header-fixed">
+            <h3 id="modalFileName" style="margin: 0; color: var(--primary); padding-right: 20px; font-size: 1.1rem; pointer-events: none; flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="">Filename</h3>
+            <button onclick="closeFileModal()" style="background:none; border:none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s; flex-shrink: 0;" onmouseover="this.style.color='var(--text-main)'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
+        </div>
+        <div class="modal-body-scrollable" id="modalBody"></div>
+    </div>
+
+    <!-- KPI detail modal — same shell,
+dynamic content -->
+    <div id="kpiModalBackdrop" class="modal-overlay" onclick="closeKpiModal()"></div>
+    <div id="kpiModal" class="modal-wrapper" style="display: none; max-width: 880px;">
+        <div class="modal-header-fixed">
+            <h3 id="kpiModalTitle" style="margin: 0; color: var(--primary); font-size: 1.1rem;">KPI</h3>
+            <button onclick="closeKpiModal()" style="background:none; border:none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='var(--text-main)'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
+        </div>
+        <div class="modal-body-scrollable" id="kpiModalBody"></div>
+    </div>
+    
+    <div id="filterMenuModal" class="modal-overlay" onclick="handleModalOverlayClick(event,
+'filterMenuModal')">
+        <div class="modal-wrapper" style="max-width: 800px; height: 60vh;">
+            <div class="modal-header-fixed">
+                <h3 style="margin: 0; color: var(--primary);">Interactive Filter Sandbox</h3>
+                <button onclick="closeFilterModal()" style="background:none; border:none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;">✕</button>
+            </div>
+            <div style="display: flex; flex-grow: 1; overflow: hidden;">
+                <div style="width: 220px; background: var(--bg-body); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto;">
+                    <button class="filter-tab active" onclick="switchFilterTab('RES')">Resolution</button>
+                    <button class="filter-tab" onclick="switchFilterTab('NQI')">NQI Score</button>
+                    <button class="filter-tab" onclick="switchFilterTab('CAT')">Category</button>
+                    <button class="filter-tab" onclick="switchFilterTab('VIDEO')">Video Codec</button>
+                    <button class="filter-tab" onclick="switchFilterTab('AUDIO_BASE')">Audio Codec</button>
+                    <button class="filter-tab" onclick="switchFilterTab('HDR')">Color / HDR</button>
+                    <button class="filter-tab" onclick="switchFilterTab('DEPTH')">Bit Depth</button>
+                    <button class="filter-tab" onclick="switchFilterTab('EXT')">Container</button>
+                </div>
+                <div id="filterChipContainer" style="flex-grow: 1; padding: 25px; display: flex; flex-direction: column; background: var(--bg-card); overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="historyModal" class="modal-overlay" onclick="handleModalOverlayClick(event,
+'historyModal')" style="display:none;">
+        <div class="modal-wrapper" style="max-width: 600px; height: 70vh;">
+            <div class="modal-header-fixed">
+                <h3 style="margin: 0; color: var(--primary);">Library Activity</h3>
+                <button onclick="closeHistoryModal()" style="background:none; border:none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;">✕</button>
+            </div>
+            <div style="display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;">
+                <button class="guide-tab active" id="hist-tab-changes" onclick="switchHistTab('changes')" style="font-size:0.85rem;padding:12px 20px;">Library Changes</button>
+                <button class="guide-tab" id="hist-tab-session" onclick="switchHistTab('session')" style="font-size:0.85rem;padding:12px 20px;">Session Log</button>
+            </div>
+            <div class="modal-body-scrollable" style="padding: 0;">
+                <div id="hist-panel-changes" style="padding: 15px;"></div>
+                <div id="hist-panel-session" style="padding: 15px; display:none;"><div style="color:var(--text-muted);font-size:0.85rem;text-align:center;font-style:italic;padding:30px 15px;">No recent actions.</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="changelogModal" class="modal-overlay" onclick="handleModalOverlayClick(event,
+'changelogModal')">
+        <div class="modal-wrapper" style="max-width: 600px;">
+            <div class="modal-header-fixed">
+                <h3 style="margin: 0; color: var(--primary);">System Changelog</h3>
+                <button onclick="closeChangelog()" style="background:none; border:none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;">✕</button>
+            </div>
+            <div class="modal-body-scrollable">
+                <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <h4 style="margin: 0; color: var(--text-main);">NNUVA Project Repositories</h4>
+                        <a href="https://github.com/hu5h55" target="_blank" rel="noopener noreferrer" class="page-footer-ai-tag" title="Visit our GitHub profile (github.com/hu5h55)">✦ AI-Generated ↗</a>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 14px;">
+                        <a href="https://github.com/hu5h55/nnuva" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none; font-size: 0.88rem;">github.com/hu5h55/nnuva (CLI) ↗</a>
+                        <a href="https://github.com/hu5h55/nnuva-report" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none; font-size: 0.88rem;">github.com/hu5h55/nnuva-report (Dashboard) ↗</a>
+                    </div>
+                </div>
+                <ul style="color: var(--text-main); font-family: monospace; font-size: 0.9rem; line-height: 1.6; padding-left: 20px; margin:0;">
+                    __UI_CHANGELOG__
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div id="guideModal" class="modal-overlay" onclick="handleModalOverlayClick(event, 'guideModal')">
+        <div class="modal-wrapper" style="width: 90%; max-width: 900px; height: 80vh;">
+            <div class="modal-header-fixed">
+                <h3 style="margin: 0; color: var(--primary);">Documentation &amp; Guides</h3>
+                <button onclick="closeGuideModal()" style="background:none; border:none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;">✕</button>
+            </div>
+            <div style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;">
+                <div style="display: flex; border-bottom: 1px solid var(--border); background: var(--bg-body); overflow-x: auto; flex-shrink: 0;">
+                    <button class="guide-tab active" onclick="switchGuideTab('intro')">What is NNUVA?</button>
+                    <button class="guide-tab" onclick="switchGuideTab('engine')">CLI Workflow</button>
+                    <button class="guide-tab" onclick="switchGuideTab('report')">Reading the Dashboard</button>
+                    <button class="guide-tab" onclick="switchGuideTab('nqi')">NQI Scoring</button>
+                    <button class="guide-tab" onclick="switchGuideTab('practices')">Best Practices</button>
+                    <button class="guide-tab" onclick="switchGuideTab('terms')">Glossary</button>
+                </div>
+
+                <div class="modal-body-scrollable">
+
+                    <div id="guide-intro" class="guide-content active">
+                        <h2 style="color: var(--primary); margin-top: 0; font-size: 1.4rem;">A media library quality optimizer for self-hosters</h2>
+                        <p style="color: var(--text-main); font-size: 1rem; line-height: 1.6; margin-bottom: 24px;">
+                            NNUVA looks at every video file in your Plex/Jellyfin/Emby library and asks two questions: <strong>Does it look good enough?</strong> and <strong>Is it bigger than it needs to be?</strong> The dashboard you're looking at is the answer, file by file, with a one-click ffmpeg or HandBrake command for anything you want to fix.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 28px; margin-bottom: 8px;">Who is this for?</h4>
+                        <p style="color: var(--text-main); font-size: 0.95rem; line-height: 1.55; margin-bottom: 20px;">
+                            Anyone running a media server at home with more than a few terabytes of content &mdash; typically Plex, Jellyfin, Emby, or Kodi setups. If you've ever thought "my library has gotten big, I wonder if I'm wasting space" or "is this 4K rip actually any good?", this tool is built for you.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 28px; margin-bottom: 8px;">The core idea: NQI scoring</h4>
+                        <p style="color: var(--text-main); font-size: 0.95rem; line-height: 1.55; margin-bottom: 12px;">
+                            Every file gets a <strong>Neutral Quality Index (NQI)</strong> score from 1 to 7 based on its <em>actual encoding</em>, not the filename or release group. NQI is the ratio of bitrate to what the resolution should reasonably need:
+                        </p>
+                        <div style="background: var(--bg-body); border-radius: 6px; padding: 14px 18px; margin-bottom: 20px; font-size: 0.92rem; line-height: 1.7;">
+                            <strong style="color: #ef4444;">NQI 1&ndash;2 (Sub-quality)</strong> &mdash; bitrate too low for the resolution. The file looks blocky. Transcoding can't fix this; you need a better source.<br>
+                            <strong style="color: #fbbf24;">NQI 3 (Acceptable)</strong> &mdash; meets baseline. Watchable, mobile-friendly.<br>
+                            <strong style="color: #34d399;">NQI 4&ndash;5 (Optimal)</strong> &mdash; sweet spot. Good quality, reasonable size. Leave alone.<br>
+                            <strong style="color: #a855f7;">NQI 6&ndash;7 (Bloat)</strong> &mdash; bitrate way above what the resolution needs. These are your transcoding gold mines.
+                        </div>
+
+                        <h4 style="color: var(--primary); margin-top: 28px; margin-bottom: 8px;">What this dashboard shows you</h4>
+                        <p style="color: var(--text-main); font-size: 0.95rem; line-height: 1.55; margin-bottom: 12px;">
+                            From top to bottom:
+                        </p>
+                        <ul style="color: var(--text-main); font-size: 0.92rem; line-height: 1.7; padding-left: 22px; margin-bottom: 20px;">
+                            <li><strong>KPI cards</strong> &mdash; at a glance: total files, total storage, reclaimable storage if you transcoded the bloat tier, and counts in each NQI band. Each card opens a detailed breakdown popup.</li>
+                            <li><strong>Quality &amp; Health charts</strong> &mdash; distributions across NQI tiers, resolutions, codecs, audio formats, HDR types, and a bitrate-vs-resolution scatter. Click any bar/segment to filter the library.</li>
+                            <li><strong>Library Explorer</strong> &mdash; file-by-file tables with sortable columns. Click any row to open the file detail modal.</li>
+                            <li><strong>File detail modal</strong> &mdash; NQI ratio bar, full media specs, copyable filename and directory path, and ready-to-run ffmpeg/HandBrake commands customized to that file.</li>
+                        </ul>
+
+                        <h4 style="color: var(--primary); margin-top: 28px; margin-bottom: 8px;">Filters wire everything together</h4>
+                        <p style="color: var(--text-main); font-size: 0.95rem; line-height: 1.55;">
+                            The search bar, the NQI quick chips, the chart clicks, the KPI breakdown rows &mdash; they all feed into one filter state. When something is filtering, the red bar appears at the top with the active filter pills. The library tables show only what matches. Hit the red &times; to clear everything.
+                        </p>
+                    </div>
+
+                    <div id="guide-engine" class="guide-content">
+                        <h2 style="color: var(--primary); margin-top: 0; font-size: 1.4rem;">Generating this dashboard</h2>
+                        <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 24px;">NNUVA is two CLI tools: a scanner and a report builder. They produce zero-dependency HTML you can serve from anywhere.</p>
+
+                        <div class="guide-step">
+                            <div class="step-icon">1</div>
+                            <div class="step-content">
+                                <h4>Install ffprobe</h4>
+                                <p>NNUVA uses <strong>ffprobe</strong> (part of FFmpeg) to read media metadata. On Debian/Ubuntu:</p>
+                                <code>sudo apt install ffmpeg</code>
+                                <p style="margin-top: 10px; font-size: 0.88rem; color: var(--text-muted);">macOS: <code style="font-size: 0.85rem;">brew install ffmpeg</code> &middot; Arch: <code style="font-size: 0.85rem;">sudo pacman -S ffmpeg</code></p>
+                            </div>
+                        </div>
+
+                        <div class="guide-step">
+                            <div class="step-icon">2</div>
+                            <div class="step-content">
+                                <h4>Scan your library</h4>
+                                <p>Run <code>nnuva</code> against any number of media root paths. It walks recursively, probes each file, and writes a cache to <code>~/.nnuva/ffprobe_cache.json</code>. Subsequent scans only reprocess changed files &mdash; they're fast.</p>
+                                <code>nnuva /mnt/media/movies /mnt/media/tv</code>
+                                <p style="margin-top: 10px; font-size: 0.88rem; color: var(--text-muted);">Typical scan: ~1 second per 100 files on a fast disk.</p>
+                            </div>
+                        </div>
+
+                        <div class="guide-step">
+                            <div class="step-icon">3</div>
+                            <div class="step-content">
+                                <h4>Generate the dashboard</h4>
+                                <p>Compile the cache into a single HTML file with embedded data, charts, and styles &mdash; no server required, no external requests at runtime.</p>
+                                <code>nnuva-report -o /var/www/html/nnuva.html</code>
+                                <p style="margin-top: 10px; font-size: 0.88rem; color: var(--text-muted);">Or omit the path to write <code style="font-size: 0.85rem;">nnuva_report.html</code> in the current directory.</p>
+                            </div>
+                        </div>
+
+                        <div class="guide-step">
+                            <div class="step-icon">4</div>
+                            <div class="step-content">
+                                <h4>Schedule it (optional)</h4>
+                                <p>Drop both commands into a cron job to keep the dashboard fresh. The Library Changes ledger (visible in the sparklines and the "since X" deltas) populates over time as snapshots accumulate.</p>
+                                <code># Run nightly at 3am
+0 3 * * * /usr/local/bin/nnuva /mnt/media/movies /mnt/media/tv &amp;&amp; /usr/local/bin/nnuva-report -o /var/www/html/nnuva.html</code>
+                            </div>
+                        </div>
+
+                        <h4 style="color: var(--primary); margin-top: 28px; margin-bottom: 8px;">Where things live</h4>
+                        <div style="background: var(--bg-body); border-radius: 6px; padding: 14px 18px; font-size: 0.9rem; line-height: 1.7; font-family: ui-monospace, Menlo, monospace;">
+                            <code style="background: none; padding: 0;">~/.nnuva/ffprobe_cache.json</code> &mdash; raw ffprobe output per file<br>
+                            <code style="background: none; padding: 0;">~/.nnuva/nnuva.db</code> &mdash; SQLite ledger of daily snapshots (powers the trend deltas)
+                        </div>
+                    </div>
+
+                    <div id="guide-report" class="guide-content">
+                        <h2 style="color: var(--primary); margin-top: 0; font-size: 1.4rem;">A guided tour</h2>
+                        <p style="color: var(--text-muted); font-size: 0.92rem; margin-bottom: 24px;">Understanding what each section is telling you.</p>
+
+                        <h4 style="color: var(--primary); margin-top: 8px;">The KPI row (top)</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                            Six cards summarize your library. The first three are size metrics (Total Files, Total Storage, Reclaimable). The last three are NQI tier counts (Optimal, Transcode, Upgrade). The little sparkline behind each card shows the 90-day trend; the meta line shows recent deltas. <strong>Click any card</strong> to open a detailed breakdown popup with per-resolution or per-codec splits and a CTA to filter the library.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">Quality &amp; Health Breakdown (middle)</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                            A grid of charts: NQI distribution, resolution, video codec, audio codec, HDR type, and bitrate-vs-resolution scatter. <strong>Every chart is clickable</strong> &mdash; click a bar, segment, or scatter point to apply that as a filter. Click again to clear it. The Bitrate Distribution histogram lets you click a bucket to filter by bitrate range.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">Library Explorer (bottom)</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 12px;">
+                            Quick NQI filter chips up top, then four tables that swap based on whether you have active filters:
+                        </p>
+                        <ul style="color: var(--text-main); font-size: 0.9rem; line-height: 1.7; padding-left: 22px; margin-bottom: 16px;">
+                            <li><strong>No filters</strong>: shows three tables side by side &mdash; Transcode Targets, Upgrade Targets, Storage Hogs.</li>
+                            <li><strong>Filters active</strong>: shows a single Filtered Results table with everything matching.</li>
+                        </ul>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                            Every column header is clickable to sort. Click again to flip direction. Click any row to open the file detail modal.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">The file detail modal</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 12px;">
+                            The most useful view for taking action on a single file:
+                        </p>
+                        <ul style="color: var(--text-main); font-size: 0.9rem; line-height: 1.7; padding-left: 22px; margin-bottom: 16px;">
+                            <li><strong>NQI Target Ratio bar</strong> &mdash; shows where this file sits on the Sub/Accept/Optimal/Bloat spectrum, with its actual ratio percentage.</li>
+                            <li><strong>Quantifiable Media Specs</strong> &mdash; eight tiles covering resolution, duration, FPS, bit depth, codec, HDR, and bitrates.</li>
+                            <li><strong>File Identity</strong> &mdash; filename and directory with copy buttons. Filename copy gives you something to web-search; directory copy gives you something to <code>cd</code> to.</li>
+                            <li><strong>Media Footprint radar</strong> &mdash; visual comparison of this file's size/bitrate/resolution/audio against the library's maximums.</li>
+                            <li><strong>Transcode &amp; Downscale Actions</strong> &mdash; context-aware ffmpeg and HandBrake commands tailored to this file's NQI tier and codec.</li>
+                        </ul>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">Search</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6;">
+                            The search input at the top searches both filename and directory path. Pressing Enter scrolls down to the Library Explorer. Search is mirrored across the top bar, the floating header bar, and the inline search next to the NQI chips &mdash; type in any of them and they all sync.
+                        </p>
+                    </div>
+
+                    <div id="guide-nqi" class="guide-content">
+                        <h2 style="color: var(--primary); margin-top: 0; font-size: 1.4rem;">Neutral Quality Index</h2>
+                        <p style="color: var(--text-main); font-size: 0.95rem; line-height: 1.6; margin-bottom: 12px;">
+                            NQI is a 1&ndash;7 score based on the ratio of a file's bitrate to a reference target for its resolution. The reference is calibrated against widely accepted "looks great at 1080p" / "looks great at 4K" baselines.
+                        </p>
+                        <p style="color: var(--text-main); font-size: 0.95rem; line-height: 1.6; margin-bottom: 24px;">
+                            <strong>Important:</strong> NQI is about <em>encoding appropriateness</em>, not subjective quality. An NQI 7 file isn't "the best"; it's wastefully encoded. NQI 4&ndash;5 is the sweet spot you want most files to live in.
+                        </p>
+                        <div class="guide-step">
+                            <div class="step-icon" style="color: #ef4444; border-color: #ef4444;">1</div>
+                            <div class="step-content"><h4 style="color: #ef4444;">Critical (sub-baseline)</h4><p>Bitrate is far below what the resolution can support. Heavy artifacting, blockiness. Common in old web rips. <strong>Transcoding will not help</strong> &mdash; find a better source.</p></div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="step-icon" style="color: #f97316; border-color: #f97316;">2</div>
+                            <div class="step-content"><h4 style="color: #f97316;">Upgrade candidate</h4><p>Below baseline. Probably watchable on a phone, painful on a TV. Worth replacing if the content matters.</p></div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="step-icon" style="color: #fbbf24; border-color: #fbbf24;">3</div>
+                            <div class="step-content"><h4 style="color: #fbbf24;">Acceptable</h4><p>Meets baseline. Fine for casual viewing, not premium. Often DVD rips or older streaming downloads.</p></div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="step-icon" style="color: #34d399; border-color: #34d399;">4</div>
+                            <div class="step-content"><h4 style="color: #34d399;">Optimal (low end)</h4><p>Good encoding. Web-DL or efficient Blu-Ray rips. Looks great on a 1080p TV with minimal storage cost.</p></div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="step-icon" style="color: #34d399; border-color: #34d399;">5</div>
+                            <div class="step-content"><h4 style="color: #34d399;">Optimal (high end)</h4><p>Excellent encoding. 4K Web-DL or well-encoded Blu-Ray. Top-tier picture, sensible file size.</p></div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="step-icon" style="color: #a855f7; border-color: #a855f7;">6</div>
+                            <div class="step-content"><h4 style="color: #a855f7;">Bloat</h4><p>Bitrate exceeds what the resolution needs. Often Blu-Ray REMUXes. <strong>Transcoding to HEVC will roughly halve file size</strong> with negligible visible loss.</p></div>
+                        </div>
+                        <div class="guide-step">
+                            <div class="step-icon" style="color: #a855f7; border-color: #a855f7;">7</div>
+                            <div class="step-content"><h4 style="color: #a855f7;">Extreme bloat</h4><p>Unconscionable bitrate for the resolution. Almost always uncompressed REMUXes or experimental encodes. Highest-priority transcoding targets.</p></div>
+                        </div>
+                    </div>
+
+                    <div id="guide-practices" class="guide-content">
+                        <h2 style="color: var(--primary); margin-top: 0; font-size: 1.4rem;">Best Practices</h2>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">Codec choice</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                            <strong>H.264 (AVC)</strong> is universally compatible &mdash; every device, every browser, every ancient TV. Use it when broad compatibility matters.<br>
+                            <strong>H.265 (HEVC)</strong> is the modern standard &mdash; about 50% better compression at equivalent quality. Use this when transcoding NQI 6&ndash;7 files to reclaim storage. Most hardware released after 2016 plays HEVC fine.<br>
+                            <strong>AV1</strong> is the next generation &mdash; even better compression than HEVC, royalty-free, but software decoding is heavy and hardware support is still spotty. Worth experimenting with for archival.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">Audio: the silent storage hog</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                            Lossless audio formats (TrueHD 7.1, DTS-HD MA) can consume 2&ndash;4 GB per movie &mdash; sometimes more than the video itself. If you don't have a 7.1 home theater receiver actually decoding those tracks, transcoding to <strong>E-AC3 (Dolby Digital Plus) at 640 kbps</strong> sounds identical on soundbars, headphones, and most living-room setups, while saving terabytes across a library.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">FFmpeg vs HandBrake</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                            <strong>FFmpeg</strong> is unmatched for stream-copying &mdash; when you want to keep the video untouched but swap audio, drop unused audio tracks, or remux into a different container. Fast and surgical.<br>
+                            <strong>HandBrake</strong> is purpose-built for transcoding, with great built-in filters for cropping, deinterlacing, and subtitle burn-in. Use it when you're actually re-encoding video. The dashboard's transcode commands prefer HandBrake for NQI 6+ video transcoding and FFmpeg for audio surgery.
+                        </p>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">When to trust the NQI score (and when not to)</h4>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6; margin-bottom: 16px;">
+                            NQI assumes a "modern, well-encoded" codec like x264/x265 with reasonable settings. Some edge cases throw it off:
+                        </p>
+                        <ul style="color: var(--text-main); font-size: 0.9rem; line-height: 1.7; padding-left: 22px; margin-bottom: 16px;">
+                            <li><strong>Animation</strong> &mdash; typically needs less bitrate than live-action for the same perceived quality. NQI may flag good animation rips as "Sub-quality".</li>
+                            <li><strong>Grain-heavy films</strong> &mdash; need higher bitrate to preserve grain. NQI may flag well-encoded film transfers as merely "Acceptable".</li>
+                            <li><strong>Dark/HDR content</strong> &mdash; modern HDR Blu-Rays use bitrate aggressively for shadow detail. Some legitimately optimal files land in NQI 6 territory.</li>
+                        </ul>
+                        <p style="color: var(--text-main); font-size: 0.92rem; line-height: 1.6;">
+                            Treat the score as a strong hint, not gospel. Always preview before committing to a transcode of irreplaceable content.
+                        </p>
+                    </div>
+
+                    <div id="guide-terms" class="guide-content">
+                        <h2 style="color: var(--primary); margin-top: 0; font-size: 1.4rem;">Glossary</h2>
+
+                        <h4 style="color: var(--primary); margin-top: 24px;">Quality &amp; encoding</h4>
+                        <div style="line-height: 1.9; font-size: 0.92rem; margin-top: 8px;">
+                            <strong style="color: var(--text-main);">NQI</strong> &mdash; Neutral Quality Index. NNUVA's 1&ndash;7 score for bitrate-appropriateness.<br>
+                            <strong style="color: var(--text-main);">Bitrate</strong> &mdash; Data per second of video (Mbps). Higher generally = better quality but bigger file.<br>
+                            <strong style="color: var(--text-main);">Resolution</strong> &mdash; Pixel dimensions. 720p, 1080p, 1440p, 2160p (4K), 4320p (8K).<br>
+                            <strong style="color: var(--text-main);">FPS</strong> &mdash; Frames per second. Most movies are 23.976; broadcast TV is 29.97 or 25.<br>
+                            <strong style="color: var(--text-main);">Bit depth</strong> &mdash; Color precision per channel. 8-bit is standard SDR, 10-bit is HDR.
+                        </div>
+
+                        <h4 style="color: var(--primary); margin-top: 28px;">Video codecs</h4>
+                        <div style="line-height: 1.9; font-size: 0.92rem; margin-top: 8px;">
+                            <strong style="color: var(--text-main);">AVC / H.264</strong> &mdash; The dominant codec since ~2005. Universal compatibility.<br>
+                            <strong style="color: var(--text-main);">HEVC / H.265</strong> &mdash; Successor to H.264. ~50% smaller files at equivalent quality.<br>
+                            <strong style="color: var(--text-main);">AV1</strong> &mdash; Modern royalty-free codec. Better than HEVC but newer hardware only.<br>
+                            <strong style="color: var(--text-main);">VP9</strong> &mdash; Google's web codec, common on YouTube. Decent compression.<br>
+                            <strong style="color: var(--text-main);">MPEG-2</strong> &mdash; Old codec from the DVD era. Should generally be transcoded.
+                        </div>
+
+                        <h4 style="color: var(--primary); margin-top: 28px;">Audio codecs</h4>
+                        <div style="line-height: 1.9; font-size: 0.92rem; margin-top: 8px;">
+                            <strong style="color: var(--text-main);">AAC</strong> &mdash; Lossy, ubiquitous on streaming and YouTube.<br>
+                            <strong style="color: var(--text-main);">AC3 / Dolby Digital</strong> &mdash; Older surround codec, very compatible.<br>
+                            <strong style="color: var(--text-main);">E-AC3 / Dolby Digital Plus</strong> &mdash; Modern DD+, used by streaming services.<br>
+                            <strong style="color: var(--text-main);">DTS</strong> &mdash; Lossy surround, often on Blu-Rays.<br>
+                            <strong style="color: var(--text-main);">TrueHD</strong> &mdash; Lossless Dolby. Massive but mathematically perfect.<br>
+                            <strong style="color: var(--text-main);">DTS-HD MA</strong> &mdash; Lossless DTS. Same idea as TrueHD, similar file sizes.<br>
+                            <strong style="color: var(--text-main);">FLAC</strong> &mdash; Lossless audio, sometimes used in releases.
+                        </div>
+
+                        <h4 style="color: var(--primary); margin-top: 28px;">Source types</h4>
+                        <div style="line-height: 1.9; font-size: 0.92rem; margin-top: 8px;">
+                            <strong style="color: var(--text-main);">REMUX</strong> &mdash; Untouched 1:1 copy from a Blu-Ray/UHD disc. Largest possible file size, identical to source.<br>
+                            <strong style="color: var(--text-main);">BDRip / BluRay</strong> &mdash; Encoded from a Blu-Ray. Smaller than REMUX.<br>
+                            <strong style="color: var(--text-main);">WEB-DL</strong> &mdash; Downloaded directly from a streaming service. Untouched.<br>
+                            <strong style="color: var(--text-main);">WEBRip</strong> &mdash; Re-encoded from streaming source.<br>
+                            <strong style="color: var(--text-main);">HDTV</strong> &mdash; Captured from broadcast TV.<br>
+                            <strong style="color: var(--text-main);">DVDRip</strong> &mdash; Encoded from a DVD. Always SD.
+                        </div>
+
+                        <h4 style="color: var(--primary); margin-top: 28px;">HDR formats</h4>
+                        <div style="line-height: 1.9; font-size: 0.92rem; margin-top: 8px;">
+                            <strong style="color: var(--text-main);">SDR</strong> &mdash; Standard dynamic range. The traditional 8-bit color space.<br>
+                            <strong style="color: var(--text-main);">HDR10</strong> &mdash; Open HDR standard. Static brightness metadata.<br>
+                            <strong style="color: var(--text-main);">HDR10+</strong> &mdash; Open HDR with dynamic per-scene metadata.<br>
+                            <strong style="color: var(--text-main);">Dolby Vision</strong> &mdash; Proprietary HDR with dynamic metadata. Best on Dolby-certified TVs.<br>
+                            <strong style="color: var(--text-main);">HLG</strong> &mdash; Hybrid Log-Gamma, broadcast-friendly HDR variant.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    __NNUVA_JS__
+
+</body>
+</html> 

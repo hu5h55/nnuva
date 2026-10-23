@@ -218,10 +218,31 @@ if [[ "$DO_UNINSTALL" == true ]]; then
     perform_uninstall
 fi
 
-# Reconnect stdin to /dev/tty if run via curl pipe and interactive
-if [[ "$NON_INTERACTIVE" == false && ! -t 0 && -e /dev/tty ]]; then
-    exec < /dev/tty
-fi
+# Reusable interactive prompt supporting both local and curl|bash execution
+prompt_read() {
+    local prompt_msg="$1"
+    local var_name="$2"
+    local default_val="${3:-}"
+
+    if [[ "$NON_INTERACTIVE" == true ]]; then
+        eval "$var_name=\"\$default_val\""
+        return
+    fi
+
+    local input_val=""
+    if [[ -t 0 ]]; then
+        read -r -p "$prompt_msg" input_val || true
+    elif [[ -e /dev/tty ]]; then
+        read -r -p "$prompt_msg" input_val < /dev/tty || true
+    else
+        input_val=""
+    fi
+
+    if [[ -z "$input_val" ]]; then
+        input_val="$default_val"
+    fi
+    eval "$var_name=\"\$input_val\""
+}
 
 interactive_wizard() {
     print_banner
@@ -230,7 +251,7 @@ interactive_wizard() {
     echo -e "${BOLD}Select installation options:${RESET}"
     echo "  1) User space (~/.local/bin) [Recommended - No root required]"
     echo "  2) System-wide (/usr/local/bin) [Requires sudo]"
-    read -r -p "Target destination [1]: " dest_choice
+    prompt_read "Target destination [1]: " dest_choice "1"
     if [[ "$dest_choice" == "2" ]]; then
         INSTALL_SCOPE="system"
         TARGET_BIN="/usr/local/bin"
@@ -245,7 +266,7 @@ interactive_wizard() {
     echo "Components to install:"
     echo "  1) Both 'nnuva' (Core Scanner) & 'nnuva-report' (Interactive HTML Dashboard)"
     echo "  2) Only 'nnuva' CLI scanner"
-    read -r -p "Selection [1]: " comp_choice
+    prompt_read "Selection [1]: " comp_choice "1"
     if [[ "$comp_choice" == "2" ]]; then
         COMPONENTS="nnuva"
     else
@@ -254,14 +275,14 @@ interactive_wizard() {
     echo ""
 
     if [[ "$COMPONENTS" == "all" ]]; then
-        read -r -p "Enable automated daily cron scan & dashboard update? [Y/n]: " cron_choice
+        prompt_read "Enable automated daily cron scan & dashboard update? [Y/n]: " cron_choice "Y"
         if [[ ! "$cron_choice" =~ ^[Nn]$ ]]; then
             ENABLE_CRON=true
-            read -r -p "Default video media directory [${DEFAULT_MEDIA_DIR}]: " custom_media
-            if [[ -n "$custom_media" ]]; then DEFAULT_MEDIA_DIR="$custom_media"; fi
+            prompt_read "Default video media directory [${DEFAULT_MEDIA_DIR}]: " custom_media "${DEFAULT_MEDIA_DIR}"
+            DEFAULT_MEDIA_DIR="$custom_media"
 
-            read -r -p "HTML dashboard output folder [${DEFAULT_OUTPUT_DIR}]: " custom_out
-            if [[ -n "$custom_out" ]]; then DEFAULT_OUTPUT_DIR="$custom_out"; fi
+            prompt_read "HTML dashboard output folder [${DEFAULT_OUTPUT_DIR}]: " custom_out "${DEFAULT_OUTPUT_DIR}"
+            DEFAULT_OUTPUT_DIR="$custom_out"
         else
             ENABLE_CRON=false
         fi
@@ -269,7 +290,7 @@ interactive_wizard() {
     fi
 }
 
-if [[ "$NON_INTERACTIVE" == false && -t 0 ]]; then
+if [[ "$NON_INTERACTIVE" == false && ( -t 0 || -e /dev/tty ) ]]; then
     interactive_wizard
 else
     print_banner

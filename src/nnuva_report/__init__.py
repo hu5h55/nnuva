@@ -1,10 +1,11 @@
 # src/nnuva_report/__init__.py
 
 APP_NAME = "nnuva-report"
-VERSION = "6.0.1"
+VERSION = "6.0.2"
 
 CHANGELOG_LINES = [
-    "v6.0.1 (2026-10-23) - FIX: Sanitized dynamic library path enrichment and minor installer path refinements.",
+    "v6.0.2 (2026-10-23) - FIX: Bundled web dashboard template into repository, robust 1-liner auto-update with branch reset, and fallback full-archive tarball downloads.",
+    "v6.0.1 (2026-10-23) - FIX: Sanitized dynamic library path enrichment and installer path defaults.",
     "v6.0.0 (2026-10-23) - MAJOR: Unified under NNUVA Suite monorepo with simultaneous CLI and dashboard release synchronization.",
     "v5.8.1 (2026-10-23) - UI/UX: Added floating theme dock & quick baseline reset button, updated AI-Generated badges with GitHub links, and restored standard CLI help & version flags.",
     "v5.8.0 (2026-10-18) - FEAT: Added 'Storage Footprint & Folder Hogs' 3-tile row (Storage by Category, Top Series & Collection Hogs, Storage Efficiency GB/Hour), a sortable 'Folder Hogs: Top Largest Series & Collections' leaderboard table, total playback runtime telemetry, and Category / Bit Depth / Container filters.",

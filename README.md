@@ -1,4 +1,4 @@
-# NNUVA Suite (v6.0.0)
+# NNUVA Suite (v6.0.2)
 
 **NNUVA** (`Nic's Nearly Universal Video Analyzer`) is a high-performance, multithreaded media analyzer and interactive dashboard generator.
 

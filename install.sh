@@ -36,6 +36,8 @@ DO_PURGE=false
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
 REPO_NNUVA="https://raw.githubusercontent.com/hu5h55/nnuva/main"
 GIT_NNUVA="https://github.com/hu5h55/nnuva.git"
+
+print_banner() {
     echo -e "${CYAN}${BOLD}"
     echo "  ⬢ NNUVA & NNUVA-REPORT UNIFIED INSTALLER ⬢"
     echo -e "  ${GRAY}High-Performance Media Analyzer & Interactive Dashboard${RESET}"

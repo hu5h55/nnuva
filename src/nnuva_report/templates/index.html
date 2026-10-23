@@ -85,11 +85,23 @@
         }
 
         /* Hero header bar — top of page only, before user scrolls */
+        .header-section {
+            display: block !important;
+            width: 100% !important;
+            margin-top: 0 !important;
+            margin-bottom: 30px !important;
+            padding-bottom: 15px !important;
+            border-bottom: 1px solid var(--border) !important;
+            box-sizing: border-box !important;
+        }
         .hero-bar {
-            display: flex;
-            align-items: center;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            width: 100% !important;
             gap: 16px;
-            padding-top: 22px;
+            padding-top: 6px;
+            box-sizing: border-box !important;
         }
         .hero-bar h1 { line-height: 1.1; margin: 0; }
 
@@ -115,14 +127,17 @@
         }
         .hero-title-btn:active { transform: scale(0.995); }
 
-        /* Real search input in hero — sits in the middle, kebab anchors right */
-        .hero-search-wrap {
+        /* Unified search input in hero & top gavel — right-aligned, identical width */
+        .hero-search-wrap,
+        .gavel-search-wrap {
             position: relative;
             display: flex;
             align-items: center;
             width: 100%;
-            max-width: 360px;
+            max-width: 380px;
             margin-left: auto;
+            flex-shrink: 0;
+            box-sizing: border-box;
         }
 
         .hero-icon-btn {
@@ -306,13 +321,6 @@
         }
 
         /* SEARCH BAR inside top gavel */
-        .gavel-search-wrap {
-            position: relative;
-            display: flex;
-            align-items: center;
-            width: 100%;
-            max-width: 600px;
-        }
         .gavel-search-icon {
             position: absolute;
             left: 10px;
@@ -397,25 +405,141 @@
             right: 6px;
         }
 
-        /* RIGHT cluster — kebab menu */
-        .meatball-wrap { position: relative; }
-        .meatball-menu {
+        /* FLOATING HEXAGON BUTTON & POPUP MENU ON BOTTOM RIGHT */
+        .floating-hex-btn {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 9995;
+            width: 48px;
+            height: 48px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            outline: none;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        /* Modern circular halo white glow */
+        .floating-hex-btn .hex-halo {
             position: absolute;
-            top: 42px;
-            right: 0;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.4) 35%, rgba(56, 189, 248, 0.25) 55%, transparent 72%);
+            box-shadow: 0 0 24px 6px rgba(255, 255, 255, 0.75), 0 0 38px 10px var(--primary-glow, rgba(56, 189, 248, 0.5));
+            opacity: 0;
+            transform: scale(0.5);
+            transition: opacity 0.28s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+        }
+        .floating-hex-btn:hover .hex-halo,
+        .floating-hex-btn.active .hex-halo {
+            opacity: 1;
+            transform: scale(1.18);
+        }
+        .floating-hex-btn:hover {
+            transform: scale(1.12) translateY(-2px);
+        }
+        .floating-hex-btn:active {
+            transform: scale(0.94);
+        }
+        .floating-hex-btn.active {
+            transform: scale(1.08);
+        }
+        .floating-hex-btn .hex-btn-svg {
+            width: 42px;
+            height: 42px;
+            display: block;
+            overflow: visible;
+            position: relative;
+            z-index: 1;
+            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+            transition: filter 0.25s ease;
+        }
+        .floating-hex-btn .hex-glyph {
+            fill: var(--primary);
+            stroke: rgba(255, 255, 255, 0.35);
+            stroke-width: 1.5;
+            transform-origin: 22px 22px;
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), fill 0.25s ease, stroke 0.25s ease;
+        }
+        .floating-hex-btn:hover .hex-glyph,
+        .floating-hex-btn.active .hex-glyph {
+            transform: rotate(30deg);
+            fill: #ffffff;
+            stroke: #ffffff;
+            stroke-width: 1.8;
+        }
+        .floating-hex-btn:hover .hex-btn-svg,
+        .floating-hex-btn.active .hex-btn-svg {
+            filter: drop-shadow(0 0 14px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 28px var(--primary));
+        }
+
+        .meatball-menu {
+            position: fixed;
+            bottom: 82px;
+            right: 24px;
             display: none;
             flex-direction: column;
-            min-width: 280px;
+            min-width: 290px;
+            max-width: 340px;
+            max-height: calc(100vh - 110px);
+            overflow-y: auto;
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
-            padding: 10px 0;
-            z-index: 99999;
+            border-radius: 14px;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+            padding: 8px 0 12px;
+            z-index: 9999;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
         }
         .meatball-menu.show {
             display: flex;
-            animation: gavelDrop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            animation: hexRise 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        @keyframes hexRise {
+            0%   { transform: translateY(12px) scale(0.96); opacity: 0; }
+            100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .hex-menu-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 16px 8px 16px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 6px;
+        }
+        .hex-menu-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+        .hex-menu-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .hex-menu-close:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.08);
         }
         .meatball-menu .mb-section-label {
             font-size: 0.65rem;
@@ -1067,10 +1191,10 @@
             padding-top: 24px;
         }
 
-        /* Page footer — soft info bar at very bottom */
+        /* Page footer — clean single line info bar at bottom */
         .page-footer {
             margin-top: 56px;
-            padding: 16px 0 24px 0;
+            padding: 18px 0 84px 0;
             border-top: 1px solid var(--border);
         }
         .page-footer-inner {
@@ -1078,17 +1202,54 @@
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            flex-wrap: wrap;
-            font-size: 0.74rem;
+            flex-wrap: nowrap;
+            white-space: nowrap;
+            font-size: 0.76rem;
             color: var(--text-muted);
         }
         .page-footer-section {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
+            gap: 8px;
+            flex-wrap: nowrap;
+            white-space: nowrap;
         }
-        .page-footer-section-right { justify-content: flex-end; }
+        .page-footer-section-right {
+            justify-content: flex-end;
+            margin-right: 48px; /* Leave breathing room for the floating hex button */
+        }
+        .theme-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            padding: 2px;
+            border-radius: 999px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            vertical-align: middle;
+        }
+        .theme-pill-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0;
+            transition: color 0.15s ease, background 0.15s ease;
+        }
+        .theme-pill-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .theme-pill-btn.active {
+            background: var(--primary-bg, rgba(56, 189, 248, 0.16));
+            color: var(--primary);
+        }
         .page-footer-glyph {
             color: var(--text-muted);
             font-size: 0.85rem;
@@ -1149,45 +1310,7 @@
             color: var(--primary);
             background: rgba(56, 189, 248, 0.08);
         }
-        .floating-theme-dock {
-            position: fixed;
-            right: 18px;
-            bottom: 14px;
-            z-index: 9500;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 4px;
-            border-radius: 999px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(12px);
-        }
-        .floating-theme-dock .menu-segment-btn {
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
-        .floating-baseline-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 24px;
-            height: 24px;
-            border-radius: 999px;
-            border: none;
-            background: transparent;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: color 0.15s ease, background 0.15s ease;
-        }
-        .floating-baseline-btn:hover {
-            color: var(--primary);
-            background: rgba(56, 189, 248, 0.12);
-        }
+
 
         /* (i) info modals (guide, changelog) must stack above ALL other modals — including the file modal */
         #guideModal,
@@ -1268,7 +1391,7 @@
             min-height: 56px !important;
             max-height: 56px !important;
             margin: 0 !important;
-            padding: 0 18px !important;
+            padding: 0 40px !important;
             background: var(--gavel-bg) !important;
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
@@ -1276,14 +1399,23 @@
             box-shadow: 0 2px 16px rgba(0,0,0,0.22);
             z-index: 9990 !important;
             display: flex !important;
-            flex-direction: row !important;
             align-items: center !important;
-            gap: 12px;
             box-sizing: border-box !important;
             transform: translateY(-100%);
             opacity: 0;
             pointer-events: none;
             transition: transform 0.22s ease-out, opacity 0.22s ease-out, background 0.25s ease;
+        }
+        .top-gavel-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            box-sizing: border-box;
         }
         body.has-floating-gavel .top-gavel {
             transform: translateY(0);
@@ -1615,16 +1747,12 @@
 
     <!-- TOP GAVEL: ⬢ baseline reset (left) | search (center) | menu (right) -->
     <div class="top-gavel" id="topGavel">
-        <!-- LEFT: brand button -> reset to baseline -->
-        <div class="gavel-cluster left" style="position:relative;">
-            <button id="hexBtn" class="gavel-brand" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)" aria-label="Reset to baseline">
+        <div class="top-gavel-inner">
+            <button id="hexBtn" class="gavel-brand" onclick="window.scrollTo({top: 0, behavior: 'smooth'})" title="Scroll to top" aria-label="Scroll to top">
                 <span class="gavel-brand-glyph">⬢</span>
                 <span>NNUVA</span>
             </button>
-        </div>
 
-        <!-- CENTER: search bar -->
-        <div class="gavel-cluster center">
             <div class="gavel-search-wrap">
                 <span class="gavel-search-icon">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -1635,58 +1763,6 @@
                 </button>
                 <button id="searchGoBtn" class="gavel-search-action" onclick="jumpToLibrary()" title="Jump to Library Explorer (Enter)" aria-label="Jump to Library Explorer">
                     <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M3 7h18"></path><path d="M3 12h18"></path><path d="M3 17h12"></path></svg>
-                </button>
-            </div>
-        </div>
-
-        <!-- RIGHT: meatball menu — quick actions, version, db info, docs & changelog -->
-        <div class="gavel-cluster right meatball-wrap">
-            <button id="meatballBtn" class="gavel-icon-btn" onclick="toggleMeatballMenu(event)" title="Menu &amp; System Info" aria-label="Menu &amp; System Info">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
-            </button>
-            <div class="meatball-menu" id="meatballMenu">
-                <div class="mb-section-label">Quick Actions</div>
-                <button class="mb-action" onclick="resetToBaseline(event)">
-                    <span style="color:var(--primary);font-size:0.9rem;line-height:1;">⬢</span>
-                    <span>Reset to Baseline</span>
-                </button>
-                <button class="mb-action" onclick="openFilterModal(); document.getElementById('meatballMenu').classList.remove('show');">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    <span>Add Filter</span>
-                </button>
-                <button class="mb-action" id="qaExportBtn">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    <span>Download CSV</span>
-                </button>
-                <button class="mb-action" id="qaClearBtn" onclick="clearAllFilters(event)">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    <span>Clear All Filters</span>
-                </button>
-                <div class="mb-divider"></div>
-                <div class="mb-section-label">Version</div>
-                <div class="mb-row"><span class="mb-key">Report</span><span class="mb-val">v__VERSION__</span></div>
-                <div class="mb-row"><span class="mb-key">Cache parser</span><span class="mb-val">v__NNUVA_CACHE_VERSION__</span></div>
-                <div class="mb-divider"></div>
-                <div class="mb-section-label">Main cache</div>
-                <div class="mb-row"><span class="mb-key">Size</span><span class="mb-val">__CACHE_SIZE_MB__ MB</span></div>
-                <div class="mb-row"><span class="mb-key">Last scan</span><span class="mb-val">__CACHE_MTIME__</span></div>
-                <div class="mb-divider"></div>
-                <div class="mb-section-label">History ledger</div>
-                <div class="mb-row"><span class="mb-key">Entries</span><span class="mb-val">__HIST_ENTRIES__ days</span></div>
-                <div class="mb-row"><span class="mb-key">Size</span><span class="mb-val">__HIST_SIZE_KB__ KB</span></div>
-                <div class="mb-row"><span class="mb-key">Last update</span><span class="mb-val">__HIST_MTIME__</span></div>
-                <div class="mb-divider"></div>
-                <button class="mb-action" id="menuGuideBtn" onclick="openGuideModal('intro'); document.getElementById('meatballMenu').classList.remove('show');">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-                    <span>Documentation &amp; Guides</span>
-                </button>
-                <button class="mb-action" onclick="jumpToSystemHealth()">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-                    <span>Open System &amp; Database Health</span>
-                </button>
-                <button class="mb-action" id="meatballChangelogBtn">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                    <span>View Changelog</span>
                 </button>
             </div>
         </div>
@@ -1781,12 +1857,12 @@
 
         <div class="header-section" style="margin-bottom: 30px;">
             <div class="hero-bar">
-                <button id="heroTitle" class="hero-title-btn" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)" aria-label="Reset to baseline">
+                <div id="heroTitle" class="hero-title-btn" style="cursor:default;">
                     <h1 style="margin: 0;">
                         <span style="color: var(--brand-text); font-weight: bold;">⬢ NNUVA</span>
                         <span style="color: var(--primary); font-weight: normal;">Library Dashboard</span>
                     </h1>
-                </button>
+                </div>
                 <div class="hero-search-wrap">
                     <span class="gavel-search-icon">
                         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -1795,10 +1871,10 @@
                     <button id="heroSearchClearBtn" class="gavel-search-clear" onclick="clearSearch()" title="Clear search" style="display:none;">
                         <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.4"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
+                    <button id="heroSearchGoBtn" class="gavel-search-action" onclick="jumpToLibrary()" title="Jump to Library Explorer (Enter)" aria-label="Jump to Library Explorer">
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M3 7h18"></path><path d="M3 12h18"></path><path d="M3 17h12"></path></svg>
+                    </button>
                 </div>
-                <button id="heroKebabBtn" class="hero-icon-btn" onclick="toggleMeatballMenu(event)" title="Menu &amp; System Info" aria-label="Menu &amp; System Info" style="margin-left: 0;">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
-                </button>
             </div>
         </div>
 
@@ -2166,68 +2242,43 @@ and distribution.</span>
             </div>
         </div>
 
-        <button id="system-health" class="collapsible-section-header" onclick="toggleSysHealth()" aria-expanded="false">
-            <span style="color: var(--text-muted);">⬢ </span>System &amp; Database Health
-            <span class="collapse-chevron" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </span>
-        </button>
-        <div class="collapsible-section-body" id="sysHealthBody">
-            <div class="action-section" id="sysHealthPanel" style="margin-bottom: 20px;">
-                <div class="db-grid">
-                    <div class="db-panel">
-                        <h4 style="margin-top: 0; color: var(--primary);">Main Cache (ffprobe_cache.json)</h4>
-                        <p><strong>Path:</strong> ~/.nnuva/ffprobe_cache.json</p>
-                        <p><strong>Parser Version:</strong> v__NNUVA_CACHE_VERSION__</p>
-                        <p><strong>Size:</strong> __CACHE_SIZE_MB__ MB</p>
-                        <p><strong>Last Scan:</strong> __CACHE_MTIME__</p>
-                    </div>
-                    <div class="db-panel">
-                        <h4 style="margin-top: 0; color: var(--primary);">History Ledger (nnuva.db)</h4>
-                        <p><strong>Path:</strong> ~/.nnuva/nnuva.db</p>
-                        <p><strong>Entries:</strong> __HIST_ENTRIES__ Days</p>
-                        <p><strong>Size:</strong> __HIST_SIZE_KB__ KB</p>
-                        <p><strong>Last Updated:</strong> __HIST_MTIME__</p>
-                    </div>
-                </div>
-            </div>
-        </div>
+
         
         <div id="toastContainer"></div>
 
-        <footer class="page-footer" style="padding-bottom: 56px;">
+        <footer class="page-footer">
             <div class="page-footer-inner">
                 <span class="page-footer-section">
-                    <button type="button" class="page-footer-brand-btn" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)">
-                        <span class="page-footer-glyph" style="color:var(--primary);">⬢</span>
-                        <span style="font-weight:600;color:var(--text-main);">NNUVA Report</span>
-                        <span class="page-footer-sep">·</span>
-                        <span>v__VERSION__</span>
-                        <span class="page-footer-sep">·</span>
-                        <span>cache parser v__NNUVA_CACHE_VERSION__</span>
+                    <span class="page-footer-glyph" style="color:var(--primary);">⬢</span>
+                    <span style="font-weight:600;color:var(--text-main);">NNUVA Suite</span>
+                    <span class="page-footer-sep">·</span>
+                    <span>v__VERSION__</span>
+                    <span class="page-footer-sep">·</span>
+                    <button type="button" class="page-footer-link" onclick="openSysHealthModal()" title="View System &amp; Database Health" style="background:none; border:none; cursor:pointer; font:inherit; padding:0; display:inline-flex; align-items:center; gap:5px;">
+                        <span style="color:#34d399; font-size:0.7rem; line-height:1;">●</span>
+                        <span>System Health</span>
                     </button>
                     <span class="page-footer-sep">·</span>
-                    <a href="https://github.com/hu5h55" target="_blank" rel="noopener noreferrer" class="page-footer-ai-tag" title="Visit our GitHub profile (github.com/hu5h55)">✦ AI-Generated ↗</a>
+                    <a href="https://github.com/hu5h55" target="_blank" rel="noopener noreferrer" class="page-footer-ai-tag" title="Visit GitHub profile">✦ AI-Generated ↗</a>
                 </span>
                 <span class="page-footer-section page-footer-section-right">
-                    <a href="https://github.com/hu5h55/nnuva" target="_blank" rel="noopener noreferrer" class="page-footer-link" title="Core CLI &amp; Analyzer Repository (hu5h55/nnuva)">
+                    <a href="https://github.com/hu5h55/nnuva" target="_blank" rel="noopener noreferrer" class="page-footer-link" title="NNUVA Suite on GitHub">
                         <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.7.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.3v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
                         hu5h55/nnuva
                     </a>
                     <span class="page-footer-sep">·</span>
-                    <a href="https://github.com/hu5h55/nnuva-report" target="_blank" rel="noopener noreferrer" class="page-footer-link" title="Dashboard &amp; Report Engine Repository (hu5h55/nnuva-report)">
-                        <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.2.7.8 1.3 1.9 1.3 3.1 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.3v3.3c0 .3.1.7.8.6A12 12 0 0 0 12 .3"/></svg>
-                        hu5h55/nnuva-report
-                    </a>
-                    <span class="page-footer-sep">·</span>
                     <a href="https://github.com/hu5h55/nnuva#readme" target="_blank" rel="noopener noreferrer" class="page-footer-link">Docs</a>
                     <span class="page-footer-sep">·</span>
-                    <a href="https://github.com/hu5h55/nnuva-report/issues" target="_blank" rel="noopener noreferrer" class="page-footer-link">Issues</a>
-                    <span class="page-footer-sep">·</span>
-                    <div class="menu-segment" style="display:inline-flex;">
-                        <button type="button" class="menu-segment-btn" data-theme-opt="light" onclick="setTheme('light')">Light</button>
-                        <button type="button" class="menu-segment-btn" data-theme-opt="dark" onclick="setTheme('dark')">Dark</button>
-                        <button type="button" class="menu-segment-btn" data-theme-opt="oled" onclick="setTheme('oled')">OLED</button>
+                    <div class="theme-pill" title="Toggle theme mode">
+                        <button type="button" class="theme-pill-btn" data-theme-opt="light" onclick="setTheme('light')" title="Light theme" aria-label="Light theme">
+                            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                        </button>
+                        <button type="button" class="theme-pill-btn" data-theme-opt="dark" onclick="setTheme('dark')" title="Dark slate theme" aria-label="Dark slate theme">
+                            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                        </button>
+                        <button type="button" class="theme-pill-btn" data-theme-opt="oled" onclick="setTheme('oled')" title="OLED black theme" aria-label="OLED black theme">
+                            <span style="font-size:0.85rem;line-height:1;display:block;">⬢</span>
+                        </button>
                     </div>
                 </span>
             </div>
@@ -2235,12 +2286,66 @@ and distribution.</span>
 
     </div>
 
-    <!-- FLOATING BOTTOM-RIGHT THEME SWITCH & BASELINE RESET -->
-    <div class="floating-theme-dock" id="floatingThemeDock">
-        <button type="button" class="menu-segment-btn" data-theme-opt="light" onclick="setTheme('light')" title="Light mode">Light</button>
-        <button type="button" class="menu-segment-btn" data-theme-opt="dark" onclick="setTheme('dark')" title="Dark slate mode">Dark</button>
-        <button type="button" class="menu-segment-btn" data-theme-opt="oled" onclick="setTheme('oled')" title="OLED pitch-black mode">OLED</button>
-        <button type="button" class="floating-baseline-btn" onclick="resetToBaseline(event)" title="Reset to baseline (clear filters &amp; scroll to top)" aria-label="Reset to baseline">↑</button>
+    <!-- FLOATING BOTTOM-RIGHT HEXAGON MENU TRIGGER -->
+    <button id="floatingHexBtn" class="floating-hex-btn" onclick="toggleHexMenu(event)" title="NNUVA Menu &amp; Diagnostics" aria-label="NNUVA Menu">
+        <span class="hex-halo" aria-hidden="true"></span>
+        <svg viewBox="0 0 44 44" class="hex-btn-svg" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon class="hex-glyph" points="22,3 39.3,13 39.3,31 22,41 4.7,31 4.7,13" />
+        </svg>
+    </button>
+
+    <!-- HEXAGON MENU POPUP (POPS UP FROM BOTTOM RIGHT) -->
+    <div class="meatball-menu" id="meatballMenu">
+        <div class="hex-menu-header">
+            <div class="hex-menu-brand">
+                <span style="color:var(--primary);font-size:1.1rem;line-height:1;">⬢</span>
+                <span style="font-weight:700;font-size:0.95rem;color:var(--text-main);">NNUVA Menu</span>
+            </div>
+            <button type="button" class="hex-menu-close" onclick="document.getElementById('meatballMenu').classList.remove('show'); document.getElementById('floatingHexBtn')?.classList.remove('active');" title="Close menu" aria-label="Close menu">✕</button>
+        </div>
+
+        <div class="mb-section-label">Quick Actions</div>
+        <button class="mb-action" onclick="openFilterModal(); document.getElementById('meatballMenu').classList.remove('show');">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Add Filter</span>
+        </button>
+        <button class="mb-action" id="qaExportBtn">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Download CSV</span>
+        </button>
+        <button class="mb-action" id="qaClearBtn" onclick="clearAllFilters(event); document.getElementById('meatballMenu').classList.remove('show');">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <span>Clear All Filters</span>
+        </button>
+
+        <div class="mb-divider"></div>
+        <div class="mb-section-label">System &amp; Health</div>
+        <button class="mb-action" id="menuGuideBtn" onclick="openGuideModal('intro'); document.getElementById('meatballMenu').classList.remove('show');">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+            <span>Documentation &amp; Guides</span>
+        </button>
+        <button class="mb-action" onclick="openSysHealthModal();">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <span>System &amp; Database Health</span>
+        </button>
+        <button class="mb-action" id="meatballChangelogBtn">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            <span>View Changelog</span>
+        </button>
+
+        <div class="mb-divider"></div>
+        <div class="mb-section-label">Version</div>
+        <div class="mb-row"><span class="mb-key">Report</span><span class="mb-val">v__VERSION__</span></div>
+        <div class="mb-row"><span class="mb-key">Cache parser</span><span class="mb-val">v__NNUVA_CACHE_VERSION__</span></div>
+        <div class="mb-divider"></div>
+        <div class="mb-section-label">Main cache</div>
+        <div class="mb-row"><span class="mb-key">Size</span><span class="mb-val">__CACHE_SIZE_MB__ MB</span></div>
+        <div class="mb-row"><span class="mb-key">Last scan</span><span class="mb-val">__CACHE_MTIME__</span></div>
+        <div class="mb-divider"></div>
+        <div class="mb-section-label">History ledger</div>
+        <div class="mb-row"><span class="mb-key">Entries</span><span class="mb-val">__HIST_ENTRIES__ days</span></div>
+        <div class="mb-row"><span class="mb-key">Size</span><span class="mb-val">__HIST_SIZE_KB__ KB</span></div>
+        <div class="mb-row"><span class="mb-key">Last update</span><span class="mb-val">__HIST_MTIME__</span></div>
     </div>
 
     <!-- BOTTOM RAIL — hover notifications only -->
@@ -2313,6 +2418,62 @@ dynamic content -->
         </div>
     </div>
 
+    <div id="sysHealthModal" class="modal-overlay" onclick="handleModalOverlayClick(event, 'sysHealthModal')" style="display:none;">
+        <div class="modal-wrapper" style="max-width: 620px;">
+            <div class="modal-header-fixed">
+                <h3 style="margin: 0; color: var(--primary); display:flex; align-items:center; gap:8px;">
+                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+                    System &amp; Database Health
+                </h3>
+                <button onclick="closeSysHealthModal()" style="background:none; border:none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer;">✕</button>
+            </div>
+            <div class="modal-body-scrollable">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding:10px 14px; background:rgba(52,211,153,0.1); border:1px solid rgba(52,211,153,0.3); border-radius:8px;">
+                    <span style="display:flex; align-items:center; gap:8px; font-weight:600; color:#34d399; font-size:0.88rem;">
+                        <span style="font-size:0.8rem;">●</span> Database Synced &amp; Operational
+                    </span>
+                    <span style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;">SQLite 3</span>
+                </div>
+
+                <div class="db-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px;">
+                    <div class="db-panel" style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:16px;">
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+                            <span style="color:var(--primary); font-size:1.1rem;">⬢</span>
+                            <h4 style="margin:0; font-size:0.92rem; color:var(--text-main);">Main Cache</h4>
+                        </div>
+                        <div style="font-size:0.82rem; line-height:1.7; color:var(--text-muted);">
+                            <div><strong>Format:</strong> JSON</div>
+                            <div><strong>Path:</strong> <code style="font-size:0.75rem; color:var(--primary);">~/.nnuva/ffprobe_cache.json</code></div>
+                            <div><strong>Parser:</strong> v__NNUVA_CACHE_VERSION__</div>
+                            <div><strong>Size:</strong> <span style="color:var(--text-main); font-weight:600;">__CACHE_SIZE_MB__ MB</span></div>
+                            <div><strong>Last Scan:</strong> __CACHE_MTIME__</div>
+                        </div>
+                    </div>
+
+                    <div class="db-panel" style="background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:16px;">
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+                            <span style="color:var(--primary); font-size:1.1rem;">⬢</span>
+                            <h4 style="margin:0; font-size:0.92rem; color:var(--text-main);">History Ledger</h4>
+                        </div>
+                        <div style="font-size:0.82rem; line-height:1.7; color:var(--text-muted);">
+                            <div><strong>Format:</strong> SQLite 3 DB</div>
+                            <div><strong>Path:</strong> <code style="font-size:0.75rem; color:var(--primary);">~/.nnuva/nnuva.db</code></div>
+                            <div><strong>Daily Snapshots:</strong> <span style="color:var(--text-main); font-weight:600;">__HIST_ENTRIES__ days</span></div>
+                            <div><strong>Size:</strong> <span style="color:var(--text-main); font-weight:600;">__HIST_SIZE_KB__ KB</span></div>
+                            <div><strong>Last Sync:</strong> __HIST_MTIME__</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="padding:12px 14px; background:var(--bg-card); border:1px solid var(--border); border-radius:8px; font-size:0.8rem; color:var(--text-muted); line-height:1.6;">
+                    <div style="font-weight:600; color:var(--text-main); margin-bottom:4px;">Maintenance &amp; CLI Commands:</div>
+                    <div>Prune stale deleted files: <code style="background:rgba(56,189,248,0.08); color:var(--primary); padding:2px 6px; border-radius:4px;">nnuva --prune</code></div>
+                    <div style="margin-top:2px;">Purge &amp; rebuild cache: <code style="background:rgba(56,189,248,0.08); color:var(--primary); padding:2px 6px; border-radius:4px;">nnuva --clear-cache</code></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="changelogModal" class="modal-overlay" onclick="handleModalOverlayClick(event,
 'changelogModal')">
         <div class="modal-wrapper" style="max-width: 600px;">
@@ -2323,12 +2484,11 @@ dynamic content -->
             <div class="modal-body-scrollable">
                 <div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border);">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                        <h4 style="margin: 0; color: var(--text-main);">NNUVA Project Repositories</h4>
-                        <a href="https://github.com/hu5h55" target="_blank" rel="noopener noreferrer" class="page-footer-ai-tag" title="Visit our GitHub profile (github.com/hu5h55)">✦ AI-Generated ↗</a>
+                        <h4 style="margin: 0; color: var(--text-main);">NNUVA Repository</h4>
+                        <a href="https://github.com/hu5h55" target="_blank" rel="noopener noreferrer" class="page-footer-ai-tag" title="Visit GitHub profile">✦ AI-Generated ↗</a>
                     </div>
                     <div style="display: flex; flex-wrap: wrap; gap: 14px;">
-                        <a href="https://github.com/hu5h55/nnuva" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none; font-size: 0.88rem;">github.com/hu5h55/nnuva (CLI) ↗</a>
-                        <a href="https://github.com/hu5h55/nnuva-report" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none; font-size: 0.88rem;">github.com/hu5h55/nnuva-report (Dashboard) ↗</a>
+                        <a href="https://github.com/hu5h55/nnuva" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none; font-size: 0.88rem;">github.com/hu5h55/nnuva (Unified Suite) ↗</a>
                     </div>
                 </div>
                 <ul style="color: var(--text-main); font-family: monospace; font-size: 0.9rem; line-height: 1.6; padding-left: 20px; margin:0;">

@@ -1,9 +1,10 @@
 # src/nnuva_report/__init__.py
 
 APP_NAME = "nnuva-report"
-VERSION = "6.0.2"
+VERSION = "6.0.3"
 
 CHANGELOG_LINES = [
+    "v6.0.3 (2026-10-23) - UI/UX: Standalone floating hex button with modern circular halo glow, dedicated system health modal, unified header & sticky search bar alignment, and streamlined single-line footer.",
     "v6.0.2 (2026-10-23) - FIX: Bundled web dashboard template into repository, robust 1-liner auto-update with branch reset, and fallback full-archive tarball downloads.",
     "v6.0.1 (2026-10-23) - FIX: Sanitized dynamic library path enrichment and installer path defaults.",
     "v6.0.0 (2026-10-23) - MAJOR: Unified under NNUVA Suite monorepo with simultaneous CLI and dashboard release synchronization.",

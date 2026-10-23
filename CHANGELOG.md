@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [6.0.3] - 2026-10-23
+
+### Added
+- **Modern Floating Hex Button with Halo Glow**: Replaced bottom-right squircle FAB with a standalone geometric hexagon icon that rotates 30° on hover and triggers an expanding circular white/cyan halo glow (`.hex-halo`).
+- **Dedicated System & Database Health Modal**: Transformed the awkward collapsible accordion at the page footer into a modal (`#sysHealthModal`) accessible directly from the single-line footer and quick actions menu.
+
+### Changed
+- **Unified Header & Sticky Search Alignment**: Aligned the static top hero search bar (`#heroSearch`) and sticky scrolling search bar (`#globalSearch`) to identical right-centered pixel coordinates across all screen widths.
+- **Single-Line Streamlined Footer**: Cleaned up the dashboard footer into a clean single line with pill theme toggles (`Light` / `Dark` / `OLED`) and removed the duplicate floating theme dock.
+- **Unified Suite Documentation**: Cleaned up project modal links and repository references to point to the unified `nnuva` monorepo.
+
+### Fixed
+- **Hero Header Width Constraint**: Resolved `display: flex` on `.header-section` which previously caused `.hero-bar` to shrink-wrap rather than spanning the full 1400px container width.
+- **Reset to Baseline Exception**: Removed broken legacy `resetToBaseline` reference and implemented smooth reset/top scroll handler.
+
+---
+
 ## [6.0.2] - 2026-10-23
 
 ### Fixed

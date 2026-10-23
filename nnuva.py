@@ -52,7 +52,7 @@ from typing import Optional, Dict, Any, Generator
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "6.0.2"
+VERSION = "6.0.3"
 CACHE_VERSION = 4
 
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}

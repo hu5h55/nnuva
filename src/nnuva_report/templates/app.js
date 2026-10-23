@@ -250,8 +250,24 @@ function handleModalOverlayClick(event, modalId) {
         if (modalId === 'filterMenuModal') closeFilterModal();
         if (modalId === 'changelogModal') closeChangelog();
         if (modalId === 'guideModal') closeGuideModal();
+        if (modalId === 'historyModal') closeHistoryModal();
+        if (modalId === 'sysHealthModal') closeSysHealthModal();
     }
 }
+
+window.openSysHealthModal = function() {
+    const m = document.getElementById('sysHealthModal');
+    if (m) m.style.display = 'flex';
+    document.getElementById('meatballMenu')?.classList.remove('show');
+    document.getElementById('floatingHexBtn')?.classList.remove('active');
+};
+
+window.closeSysHealthModal = function() {
+    const m = document.getElementById('sysHealthModal');
+    if (m) m.style.display = 'none';
+};
+
+window.jumpToSystemHealth = window.openSysHealthModal;
 
 function assertDOM() {
     const ids = ['nqiChart', 'resChart', 'resSizeChart', 'catSizeChart', 'seriesHogChart', 'catEfficiencyChart', 'codecChart', 'audioChart', 'hdrChart', 'bitrateScatterChart'];
@@ -1283,6 +1299,12 @@ window.clearAllFilters = function(e) {
     syncTopChartVisibility();
 };
 
+window.resetToBaseline = function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (typeof clearAllFilters === 'function') clearAllFilters();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 window.clearSearch = function() {
     searchQuery = '';
     ['globalSearch', 'librarySearch', 'heroSearch'].forEach(id => {
@@ -1318,17 +1340,7 @@ window.jumpToLibrary = function() {
 };
 
 window.jumpToSystemHealth = function() {
-    document.getElementById('meatballMenu')?.classList.remove('show');
-    const target = document.getElementById('system-health');
-    const body = document.getElementById('sysHealthBody');
-    if (!target || !body) return;
-    // Expand if collapsed so clicking from the kebab menu reveals contents
-    if (target.getAttribute('aria-expanded') !== 'true') {
-        target.setAttribute('aria-expanded', 'true');
-        body.classList.add('expanded');
-    }
-    // Scroll AFTER expansion starts so the dropdown is visible at the destination
-    requestAnimationFrame(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    window.openSysHealthModal();
 };
 
 window.toggleSysHealth = function() {
@@ -1344,65 +1356,41 @@ window.toggleSysHealth = function() {
     }
 };
 
-window.toggleMeatballMenu = function(e) {
+window.toggleHexMenu = function(e) {
     if (e) e.stopPropagation();
     const menu = document.getElementById('meatballMenu');
+    const btn = document.getElementById('floatingHexBtn');
     if (!menu) return;
-    document.getElementById('hexMenu')?.classList.remove('show');
     if (menu.classList.contains('show')) {
         menu.classList.remove('show');
+        btn?.classList.remove('active');
         return;
     }
-    _anchorMenuToTrigger(menu, ['meatballBtn', 'heroKebabBtn'], 'right');
     menu.classList.add('show');
+    btn?.classList.add('active');
 };
+window.toggleMeatballMenu = window.toggleHexMenu;
 
-// Anchor a menu under whichever trigger button is currently visible.
-// Tries IDs in order; first one with a non-zero, in-viewport rect wins.
-// Portals the menu to <body> so a transformed ancestor (e.g. hidden top-gavel)
-// can't trap fixed-position descendants.
-function _anchorMenuToTrigger(menu, triggerIds, align) {
-    let trigger = null;
-    for (const id of triggerIds) {
-        const el = document.getElementById(id);
-        if (!el) continue;
-        const r = el.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) {
-            trigger = el;
-            break;
-        }
-    }
-    if (!trigger) return false;
-
-    // Move to body so transformed ancestors don't trap fixed positioning
-    if (menu.parentNode !== document.body) {
-        document.body.appendChild(menu);
-    }
-
-    // Reset positioning props that might linger from a previous open
-    menu.style.position = 'fixed';
-    menu.style.top = '';
-    menu.style.left = '';
-    menu.style.right = '';
-    menu.style.bottom = '';
-
-    const rect = trigger.getBoundingClientRect();
-    menu.style.top = `${Math.round(rect.bottom + 6)}px`;
-    if (align === 'right') {
-        menu.style.right = `${Math.round(window.innerWidth - rect.right)}px`;
-    } else {
-        menu.style.left = `${Math.round(rect.left)}px`;
-    }
-    return true;
-}
-
-// Click-outside handler for kebab menu
+// Click-outside handler for hex menu
 document.addEventListener('click', function(e) {
     const menu = document.getElementById('meatballMenu');
-    const btn = document.getElementById('meatballBtn');
-    const heroBtn = document.getElementById('heroKebabBtn');
-    if (menu?.classList.contains('show') && !menu.contains(e.target) && !btn?.contains(e.target) && !heroBtn?.contains(e.target)) {
+    const btn = document.getElementById('floatingHexBtn');
+    if (menu?.classList.contains('show') && !menu.contains(e.target) && !btn?.contains(e.target)) {
         menu.classList.remove('show');
+        btn?.classList.remove('active');
+    }
+});
+
+// Escape key to close any active menu or modal
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        if (typeof closeSysHealthModal === 'function') closeSysHealthModal();
+        if (typeof closeGuideModal === 'function') closeGuideModal();
+        if (typeof closeChangelog === 'function') closeChangelog();
+        if (typeof closeHistoryModal === 'function') closeHistoryModal();
+        if (typeof closeFilterModal === 'function') closeFilterModal();
+        document.getElementById('meatballMenu')?.classList.remove('show');
+        document.getElementById('floatingHexBtn')?.classList.remove('active');
     }
 });
 
@@ -4012,6 +4000,7 @@ async function bootDashboard() {
         const meatballChangelogBtn = document.getElementById('meatballChangelogBtn');
         if (meatballChangelogBtn) meatballChangelogBtn.addEventListener('click', function() {
             document.getElementById('meatballMenu')?.classList.remove('show');
+            document.getElementById('floatingHexBtn')?.classList.remove('active');
             openChangelog();
         });
 
@@ -4030,9 +4019,6 @@ async function bootDashboard() {
                 const rect = hero.getBoundingClientRect();
                 const shouldFloat = rect.bottom < 8;
                 if (shouldFloat !== wasFloating) {
-                    // State change — close any open dropdowns to avoid orphan-anchored menus
-                    document.getElementById('hexMenu')?.classList.remove('show');
-                    document.getElementById('meatballMenu')?.classList.remove('show');
                     wasFloating = shouldFloat;
                 }
                 document.body.classList.toggle('has-floating-gavel', shouldFloat);

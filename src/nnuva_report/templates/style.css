@@ -72,7 +72,7 @@ body {
 .filter-hide-btn:hover { background: var(--border); color: var(--text-main); }
 
 /* === TYPOGRAPHY & HEADERS === */
-.header-section { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 30px; flex-wrap: wrap; gap: 15px; margin-top: 20px; }
+.header-section { display: block; width: 100%; border-bottom: 1px solid var(--border); padding-bottom: 15px; margin-bottom: 30px; margin-top: 0; box-sizing: border-box; }
 h1 { margin: 0; font-size: 2.5rem; display: flex; align-items: center; gap: 12px; }
 .header-controls { display: flex; align-items: center; gap: 15px; margin-left: auto; }
 .master-reset-btn { background: var(--primary-bg); border: 1px solid var(--primary); color: var(--primary); font-size: 0.9rem; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; display: none; font-weight: bold; text-decoration: none; }

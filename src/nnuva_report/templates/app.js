@@ -182,12 +182,9 @@ function formatRuntimeHours(sec) {
 
 function enrichFileMetadata(f) {
     const d = String(f.dir || '');
-    let rel = d;
-    for (const pfx of ['/media/videos/', '/media/videos/']) {
-        if (rel.startsWith(pfx)) {
-            rel = rel.slice(pfx.length);
-            break;
-        }
+    let rel = d.replace(/^\/(?:mnt|media|volumes|volume\d+|share)\/[^/]+\/(?:video|media|movies|tv)\//i, '');
+    if (rel === d) {
+        rel = d.replace(/^\/(?:mnt|media)\/[^/]+\//i, '');
     }
     const parts = rel.split('/').filter(Boolean);
     const rawCat = (parts[0] || 'other').toLowerCase();

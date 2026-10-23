@@ -1,18 +1,12 @@
-# NNUVA (Nic's Nearly Universal Video Analyzer)
+# NNUVA Suite (v6.0.0)
 
-NNUVA is a lightning-fast, multithreaded CLI tool built to scan your local media library and output a perfectly aligned, color-coded grid of video codecs, bitrates, HDR profiles, and audio tracks. 
+**NNUVA** (`Nic's Nearly Universal Video Analyzer`) is a high-performance, multithreaded media analyzer and interactive dashboard generator.
 
-Instead of dealing with unreadable JSON dumps or running manual `ffprobe` commands file by file, NNUVA processes entire directories concurrently and scales its output dynamically to fit your terminal.
+It brings together:
+1. **`nnuva`**: Lightning-fast CLI terminal analyzer that outputs dynamically aligned, color-coded matrices of codecs, bitrates, HDR profiles, and audio tracks.
+2. **`nnuva-report`**: Automated SQLite analytics engine and interactive HTML5 web dashboard with multi-mode themes (OLED / Dark / Light), Chart.js visualizations, and media health metrics.
 
-## Features
-* **Multithreaded Scanning:** Processes hundreds of files concurrently (default: 10 threads).
-* **Dynamic Grid Layout:** Automatically calculates the exact mathematical width needed for your specific filenames and codecs.
-* **Color-Coded Output:** Visually flags 4K, HEVC, TrueHD, 10-bit color, and corrupted files.
-* **HDR & Dolby Vision Detection:** Explicitly calls out HDR10, HDR10+, and Dolby Vision (including Trap Profile 5).
-
-## Prerequisites
-* **Python 3** (No external `pip` libraries required)
-* **FFmpeg / ffprobe** installed and available in your system path.
+---
 
 ## Installation
 

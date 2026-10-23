@@ -34,8 +34,8 @@ DO_PURGE=false
 
 # Locate current script directory if run locally
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
-
-print_banner() {
+REPO_NNUVA="https://raw.githubusercontent.com/hu5h55/nnuva/main"
+GIT_NNUVA="https://github.com/hu5h55/nnuva.git"
     echo -e "${CYAN}${BOLD}"
     echo "  ⬢ NNUVA & NNUVA-REPORT UNIFIED INSTALLER ⬢"
     echo -e "  ${GRAY}High-Performance Media Analyzer & Interactive Dashboard${RESET}"
@@ -276,62 +276,41 @@ fi
 
 mkdir -p "$TARGET_BIN"
 
-# --- Install nnuva CLI ---
-if [[ "$COMPONENTS" == "all" || "$COMPONENTS" == "nnuva" ]]; then
-    echo -e "${BOLD}Installing nnuva CLI...${RESET}"
-    DEST_NNUVA="${TARGET_BIN}/nnuva"
-    
-    if [[ -f "${SCRIPT_DIR}/nnuva.py" ]]; then
-        # Local repository mode: symlink to keep in sync with git
-        ln -sf "${SCRIPT_DIR}/nnuva.py" "$DEST_NNUVA"
-        echo -e "  [${GREEN}✓${RESET}] Linked ${DEST_NNUVA} -> ${SCRIPT_DIR}/nnuva.py"
+# --- Install Suite Components ---
+if [[ -f "${SCRIPT_DIR}/nnuva.py" && -f "${SCRIPT_DIR}/nnuva-report" ]]; then
+    # Local repository mode: symlink directly to keep in sync with git
+    SOURCE_DIR="${SCRIPT_DIR}"
+else
+    # Remote 1-liner mode: clone/pull unified repository into ~/.local/share/nnuva
+    SOURCE_DIR="${HOME}/.local/share/nnuva"
+    mkdir -p "${HOME}/.local/share"
+    if [[ -d "${SOURCE_DIR}/.git" ]]; then
+        (cd "$SOURCE_DIR" && git pull --quiet origin main 2>/dev/null || true)
+    elif command -v git >/dev/null 2>&1; then
+        echo -e "${BOLD}Cloning NNUVA repository...${RESET}"
+        git clone --quiet "$GIT_NNUVA" "$SOURCE_DIR"
     else
-        # Remote 1-liner mode: fetch directly
-        curl -fsSL "${REPO_NNUVA}/nnuva.py" -o "$DEST_NNUVA"
-        chmod +x "$DEST_NNUVA"
-        echo -e "  [${GREEN}✓${RESET}] Downloaded and installed ${DEST_NNUVA}"
+        mkdir -p "$SOURCE_DIR"
+        curl -fsSL "${REPO_NNUVA}/nnuva.py" -o "${SOURCE_DIR}/nnuva.py"
+        curl -fsSL "${REPO_NNUVA}/nnuva-report" -o "${SOURCE_DIR}/nnuva-report"
+        chmod +x "${SOURCE_DIR}/nnuva.py" "${SOURCE_DIR}/nnuva-report"
     fi
 fi
 
-# --- Install nnuva-report ---
+if [[ "$COMPONENTS" == "all" || "$COMPONENTS" == "nnuva" ]]; then
+    echo -e "${BOLD}Installing nnuva CLI...${RESET}"
+    DEST_NNUVA="${TARGET_BIN}/nnuva"
+    ln -sf "${SOURCE_DIR}/nnuva.py" "$DEST_NNUVA"
+    chmod +x "${SOURCE_DIR}/nnuva.py" 2>/dev/null || true
+    echo -e "  [${GREEN}✓${RESET}] Linked ${DEST_NNUVA} -> ${SOURCE_DIR}/nnuva.py"
+fi
+
 if [[ "$COMPONENTS" == "all" || "$COMPONENTS" == "report" ]]; then
     echo -e "${BOLD}Installing nnuva-report...${RESET}"
     DEST_REPORT="${TARGET_BIN}/nnuva-report"
-    
-    # Check if local nnuva-report repository exists adjacent or on standard RAID path
-    LOCAL_REPORT_PATHS=(
-        "${SCRIPT_DIR}/../nnuva-report/nnuva-report"
-        "/mnt/media/git/nnuva-report/nnuva-report"
-        "${HOME}/gravity/projects/nnuva/src/nnuva-report/nnuva-report"
-    )
-
-    FOUND_LOCAL_REPORT=""
-    for r in "${LOCAL_REPORT_PATHS[@]}"; do
-        if [[ -f "$r" ]]; then
-            FOUND_LOCAL_REPORT="$r"
-            break
-        fi
-    done
-
-    if [[ -n "$FOUND_LOCAL_REPORT" ]]; then
-        ln -sf "$FOUND_LOCAL_REPORT" "$DEST_REPORT"
-        echo -e "  [${GREEN}✓${RESET}] Linked ${DEST_REPORT} -> ${FOUND_LOCAL_REPORT}"
-    else
-        # Clone/pull into ~/.local/share/nnuva-report
-        SHARE_DIR="${HOME}/.local/share/nnuva-report"
-        mkdir -p "${HOME}/.local/share"
-        if [[ -d "${SHARE_DIR}/.git" ]]; then
-            (cd "$SHARE_DIR" && git pull --quiet origin main 2>/dev/null || true)
-        elif command -v git >/dev/null 2>&1; then
-            git clone --quiet "$GIT_REPORT" "$SHARE_DIR"
-        fi
-        
-        if [[ -f "${SHARE_DIR}/nnuva-report" ]]; then
-            chmod +x "${SHARE_DIR}/nnuva-report"
-            ln -sf "${SHARE_DIR}/nnuva-report" "$DEST_REPORT"
-            echo -e "  [${GREEN}✓${RESET}] Installed ${DEST_REPORT} via ${SHARE_DIR}"
-        fi
-    fi
+    ln -sf "${SOURCE_DIR}/nnuva-report" "$DEST_REPORT"
+    chmod +x "${SOURCE_DIR}/nnuva-report" 2>/dev/null || true
+    echo -e "  [${GREEN}✓${RESET}] Linked ${DEST_REPORT} -> ${SOURCE_DIR}/nnuva-report"
 fi
 
 # --- Establish Homebase Structure ---

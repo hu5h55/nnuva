@@ -11,6 +11,7 @@
 # ==============================================================================
 # CHANGELOG
 # ==============================================================================
+# v6.0.0 (2026-10-23) - MAJOR: Merged nnuva-report into unified NNUVA Suite monorepo, with standalone CLI scanner and interactive dashboard engine in one repository.
 # v2.9.38 (2026-10-23) - ARCH: Standalone mode by default (in-memory, zero filesystem pollution without --install or --cache), added --prune for stale cache cleanup, and unified curl|bash installer.
 # v2.9.37 (2026-05-09) - UX: Summary NQI rows now align correctly (ANSI-aware width). NQI labels renamed to Sub-/Sub/Sub+/Acceptable/Optimal/Optimal+/Bloat for consistency with nnuva-report.
 # v2.9.36 (2026-05-05) - UX: Added -s/--summary flag, prompt default flipped to [Y/n], summary footer alignment fixed.
@@ -50,7 +51,7 @@ from typing import Optional, Dict, Any, Generator
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-VERSION = "2.9.38"
+VERSION = "6.0.0"
 CACHE_VERSION = 4
 
 SUPPORTED_EXTS = {'.mkv', '.mp4', '.avi', '.ts', '.mov', '.webm', '.flv', '.m4v'}

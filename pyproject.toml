@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nnuva"
+version = "6.0.0"
+description = "NNUVA Suite: High-Performance Media Analyzer & Interactive Dashboard"
+authors = [{name = "Nic"}]
+requires-python = ">=3.7"
+dependencies = []
+
+[project.scripts]
+nnuva-report = "nnuva_report.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nnuva_report = ["templates/*"]
